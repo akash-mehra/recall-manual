@@ -12,15 +12,15 @@
 */
 
 const firebaseConfig = {
-  apiKey: "REPLACE_ME",
-  authDomain: "REPLACE_ME.firebaseapp.com",
-  projectId: "REPLACE_ME",
-  storageBucket: "REPLACE_ME.appspot.com",
-  messagingSenderId: "REPLACE_ME",
-  appId: "REPLACE_ME",
+  apiKey: "AIzaSyAB3BRDpWuFOt7CCjEp3ZW3c8F7WxYHu4Y",
+  authDomain: "recall-manual.firebaseapp.com",
+  projectId: "recall-manual",
+  storageBucket: "recall-manual.firebasestorage.app",
+  messagingSenderId: "224241277021",
+  appId: "1:224241277021:web:3ca61e846f3e778c6355b4",
 };
 
-const googleOAuthClientId = "REPLACE_ME.apps.googleusercontent.com";
+const googleOAuthClientId = "224241277021-68q1e47lgoekkrck5aa5bm8vvct146q4.apps.googleusercontent.com";
 
 firebase.initializeApp(firebaseConfig);
 const firebaseAuth = firebase.auth();
