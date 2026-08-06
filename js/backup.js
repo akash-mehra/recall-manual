@@ -33,7 +33,7 @@ async function deserializeFace(face) {
   return out;
 }
 
-async function exportAllData() {
+async function buildExportPayload() {
   const decks = await RecallDB.Decks.all();
   const payload = { version: 1, exportedAt: new Date().toISOString(), decks: [] };
 
@@ -63,6 +63,11 @@ async function exportAllData() {
     });
   }
 
+  return payload;
+}
+
+async function exportAllData() {
+  const payload = await buildExportPayload();
   const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -78,6 +83,10 @@ async function exportAllData() {
 async function importDataFromFile(file) {
   const text = await file.text();
   const payload = JSON.parse(text);
+  return importFromPayload(payload, { suffix: ' (imported)' });
+}
+
+async function importFromPayload(payload, { suffix = '' } = {}) {
   if (!payload || !Array.isArray(payload.decks)) {
     throw new Error('Not a valid Recall Manual backup file');
   }
@@ -87,9 +96,10 @@ async function importDataFromFile(file) {
 
   for (const deckData of payload.decks) {
     const deck = await RecallDB.Decks.create({
-      name: deckData.name + ' (imported)',
+      name: deckData.name + suffix,
       subject: deckData.subject || '',
       subtopic: deckData.subtopic || '',
+      createdAt: deckData.createdAt,
     });
     deckCount++;
 
@@ -109,4 +119,46 @@ async function importDataFromFile(file) {
   return { deckCount, cardCount };
 }
 
-window.RecallBackup = { exportAllData, importDataFromFile };
+/* Full-replace restore used by Drive sync: wipes local data and rebuilds it
+   with the SAME ids as the backup, so this device's local state becomes
+   byte-identical to what's on Drive (keeps future syncs consistent).
+   Runs inside RecallDB.runSilently so it doesn't immediately re-trigger a
+   push back to Drive.
+*/
+async function replaceAllDataFromPayload(payload) {
+  if (!payload || !Array.isArray(payload.decks)) {
+    throw new Error('Not a valid Recall Manual backup file');
+  }
+  await RecallDB.runSilently(async () => {
+    await RecallDB.clearAllData();
+    for (const deckData of payload.decks) {
+      const deck = await RecallDB.Decks.create({
+        id: deckData.id,
+        name: deckData.name,
+        subject: deckData.subject || '',
+        subtopic: deckData.subtopic || '',
+        createdAt: deckData.createdAt,
+      });
+      for (const cardData of deckData.cards || []) {
+        await RecallDB.Cards.create({
+          id: cardData.id,
+          deckId: deck.id,
+          type: cardData.type,
+          colorTag: cardData.colorTag || null,
+          struck: !!cardData.struck,
+          createdAt: cardData.createdAt,
+          front: await deserializeFace(cardData.front),
+          back: await deserializeFace(cardData.back),
+        });
+      }
+    }
+  });
+}
+
+window.RecallBackup = {
+  exportAllData,
+  importDataFromFile,
+  buildExportPayload,
+  importFromPayload,
+  replaceAllDataFromPayload,
+};

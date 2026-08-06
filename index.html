@@ -88,6 +88,36 @@
     text-align: center;
   }
 
+  .auth-area { display: flex; align-items: center; gap: 10px; }
+  .sign-in-btn {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--glass-fill-strong);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+    padding: 8px 14px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .user-chip { display: flex; align-items: center; gap: 8px; }
+  .user-chip img { width: 28px; height: 28px; border-radius: 50%; }
+  .user-chip .name { font-size: 0.78rem; color: var(--ink-soft); max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sync-badge {
+    font-size: 0.7rem;
+    padding: 3px 9px;
+    border-radius: 20px;
+    background: rgba(255,255,255,0.6);
+    color: var(--ink-soft);
+  }
+  .sync-badge.syncing { color: var(--tag-yellow); }
+  .sync-badge.synced { color: var(--tag-green); }
+  .sync-badge.error { color: var(--tag-red); }
+  .sign-out-btn {
+    background: none; border: none; font-size: 0.72rem; color: var(--ink-soft);
+    text-decoration: underline; cursor: pointer; padding: 0;
+  }
+
   .backup-row {
     display: flex;
     gap: 10px;
@@ -123,6 +153,7 @@
       <h1>Recall Manual 🌸</h1>
       <div class="subtitle">Your cards, your handwriting, your pace</div>
     </div>
+    <div id="authArea" class="auth-area"></div>
   </div>
 
   <div class="container">
@@ -157,7 +188,12 @@
 <button class="fab" id="addDeckFab" aria-label="New deck">+</button>
 <div class="toast" id="toast"></div>
 
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script src="js/firebase-init.js"></script>
+<script src="js/auth.js"></script>
 <script src="js/db.js"></script>
+<script src="js/drive-sync.js"></script>
 <script src="js/sakura.js"></script>
 <script src="js/backup.js"></script>
 <script>
@@ -169,6 +205,58 @@
     t.classList.add('show');
     setTimeout(() => t.classList.remove('show'), 1800);
   }
+
+  /* ---- Auth + sync UI ---- */
+  const authArea = document.getElementById('authArea');
+
+  function renderSignedOut() {
+    authArea.innerHTML = `<button class="sign-in-btn" id="signInBtn">Sign in with Google</button>`;
+    document.getElementById('signInBtn').addEventListener('click', async () => {
+      try {
+        await RecallAuth.signIn();
+      } catch (err) {
+        showToast('Sign-in failed: ' + err.message);
+      }
+    });
+  }
+
+  function renderSignedIn(user) {
+    authArea.innerHTML = `
+      <span class="sync-badge" id="syncBadge">idle</span>
+      <div class="user-chip">
+        <img src="${user.photoURL || ''}" alt="" onerror="this.style.display='none'" />
+        <span class="name">${user.displayName || user.email || ''}</span>
+      </div>
+      <button class="sign-out-btn" id="signOutBtn">Sign out</button>
+    `;
+    document.getElementById('signOutBtn').addEventListener('click', async () => {
+      await RecallAuth.signOut();
+    });
+  }
+
+  RecallAuth.onAuthChange(async (user) => {
+    if (user) {
+      renderSignedIn(user);
+      const result = await RecallSync.reconcileOnSignIn();
+      if (result.action === 'pulled') {
+        showToast(`Synced from Drive: ${result.deckCount} deck(s) restored`);
+        renderDecks();
+      } else if (result.action === 'pushed-initial' || result.action === 'pushed') {
+        showToast('Backed up to Drive');
+      } else if (result.action === 'error') {
+        showToast('Drive sync error: ' + result.message);
+      }
+    } else {
+      renderSignedOut();
+    }
+  });
+
+  RecallSync.onStatus((status) => {
+    const badge = document.getElementById('syncBadge');
+    if (!badge) return;
+    badge.className = 'sync-badge ' + status;
+    badge.textContent = status === 'syncing' ? 'syncing…' : status === 'synced' ? 'synced' : status === 'error' ? 'sync error' : status;
+  });
 
   document.getElementById('exportBtn').addEventListener('click', async () => {
     showToast('Preparing export…');

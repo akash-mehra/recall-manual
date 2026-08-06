@@ -39,6 +39,23 @@ function uid() {
   return Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 9);
 }
 
+let dirtySuppressed = false;
+
+function markDirty() {
+  if (!dirtySuppressed && window.RecallSync && window.RecallSync.markDirty) {
+    window.RecallSync.markDirty();
+  }
+}
+
+async function runSilently(asyncFn) {
+  dirtySuppressed = true;
+  try {
+    return await asyncFn();
+  } finally {
+    dirtySuppressed = false;
+  }
+}
+
 async function tx(storeName, mode) {
   const db = await openDB();
   return db.transaction(storeName, mode).objectStore(storeName);
@@ -47,18 +64,18 @@ async function tx(storeName, mode) {
 /* ---------- Decks ---------- */
 
 const Decks = {
-  async create({ name, subject = '', subtopic = '' }) {
+  async create({ id, name, subject = '', subtopic = '', createdAt } = {}) {
     const store = await tx('decks', 'readwrite');
     const deck = {
-      id: uid(),
+      id: id || uid(),
       name,
       subject,
       subtopic,
-      createdAt: Date.now(),
+      createdAt: createdAt || Date.now(),
     };
     return new Promise((resolve, reject) => {
       const r = store.add(deck);
-      r.onsuccess = () => resolve(deck);
+      r.onsuccess = () => { markDirty(); resolve(deck); };
       r.onerror = () => reject(r.error);
     });
   },
@@ -95,6 +112,15 @@ const Decks = {
     const deckStore = await tx('decks', 'readwrite');
     return new Promise((resolve, reject) => {
       const r = deckStore.delete(id);
+      r.onsuccess = () => { markDirty(); resolve(); };
+      r.onerror = () => reject(r.error);
+    });
+  },
+
+  async clearAll() {
+    const store = await tx('decks', 'readwrite');
+    return new Promise((resolve, reject) => {
+      const r = store.clear();
       r.onsuccess = () => resolve();
       r.onerror = () => reject(r.error);
     });
@@ -118,7 +144,7 @@ const Cards = {
   async create(card) {
     const store = await tx('cards', 'readwrite');
     const full = {
-      id: uid(),
+      id: card.id || uid(),
       colorTag: null,
       struck: false,
       reviewCount: 0,
@@ -128,7 +154,7 @@ const Cards = {
     };
     return new Promise((resolve, reject) => {
       const r = store.add(full);
-      r.onsuccess = () => resolve(full);
+      r.onsuccess = () => { markDirty(); resolve(full); };
       r.onerror = () => reject(r.error);
     });
   },
@@ -152,7 +178,7 @@ const Cards = {
         if (!existing) return reject(new Error('Card not found'));
         const updated = { ...existing, ...patch, updatedAt: Date.now() };
         const putReq = store.put(updated);
-        putReq.onsuccess = () => resolve(updated);
+        putReq.onsuccess = () => { markDirty(); resolve(updated); };
         putReq.onerror = () => reject(putReq.error);
       };
       getReq.onerror = () => reject(getReq.error);
@@ -163,7 +189,7 @@ const Cards = {
     const store = await tx('cards', 'readwrite');
     return new Promise((resolve, reject) => {
       const r = store.delete(id);
-      r.onsuccess = () => resolve();
+      r.onsuccess = () => { markDirty(); resolve(); };
       r.onerror = () => reject(r.error);
     });
   },
@@ -172,7 +198,21 @@ const Cards = {
     const cards = await Cards.byDeck(deckId);
     return cards.length;
   },
+
+  async clearAll() {
+    const store = await tx('cards', 'readwrite');
+    return new Promise((resolve, reject) => {
+      const r = store.clear();
+      r.onsuccess = () => resolve();
+      r.onerror = () => reject(r.error);
+    });
+  },
 };
+
+async function clearAllData() {
+  await Cards.clearAll();
+  await Decks.clearAll();
+}
 
 async function estimateStorage() {
   if (navigator.storage && navigator.storage.estimate) {
@@ -182,4 +222,4 @@ async function estimateStorage() {
   return null;
 }
 
-window.RecallDB = { Decks, Cards, estimateStorage, uid };
+window.RecallDB = { Decks, Cards, estimateStorage, uid, runSilently, clearAllData };

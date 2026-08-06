@@ -16,6 +16,9 @@ const ASSETS = [
   'js/canvas-draw.js',
   'js/camera-capture.js',
   'js/backup.js',
+  'js/firebase-init.js',
+  'js/auth.js',
+  'js/drive-sync.js',
   'icons/icon-192.png',
   'icons/icon-512.png',
 ];
