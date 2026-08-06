@@ -1,0 +1,140 @@
+/* theme.css — Recall Manual design tokens
+   Palette: soft blossom light theme (replaces old app's dark/neutral base)
+   Signature element: glass cards floating over a drifting sakura petal field
+*/
+
+@import url('https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700&family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+  /* Palette */
+  --bg-top: #fff7f9;
+  --bg-bottom: #fdeaf1;
+  --blossom: #f7a8c4;
+  --blossom-deep: #e888ab;
+  --ink: #5b3b4c;
+  --ink-soft: #8a6b79;
+  --glass-fill: rgba(255, 255, 255, 0.55);
+  --glass-fill-strong: rgba(255, 255, 255, 0.75);
+  --glass-border: rgba(255, 255, 255, 0.7);
+
+  /* Confidence tags */
+  --tag-green: #8fbc94;
+  --tag-yellow: #e8b872;
+  --tag-red: #e08a8a;
+
+  /* Type */
+  --font-display: 'Zen Maru Gothic', sans-serif;
+  --font-body: 'Inter', sans-serif;
+
+  /* Layout */
+  --radius-lg: 28px;
+  --radius-md: 18px;
+  --radius-sm: 12px;
+  --shadow-soft: 0 8px 32px rgba(180, 120, 145, 0.18);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  font-family: var(--font-body);
+  color: var(--ink);
+  background: linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
+  overflow-x: hidden;
+}
+
+#sakura-canvas {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.app-shell {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+h1, h2, h3 {
+  font-family: var(--font-display);
+  color: var(--ink);
+  margin: 0;
+}
+
+a { color: inherit; text-decoration: none; }
+
+/* Glass card primitive */
+.glass {
+  background: var(--glass-fill);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow: var(--shadow-soft);
+}
+
+.btn {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.95rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 12px 20px;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.btn:active { transform: scale(0.97); }
+
+.btn-primary {
+  background: var(--blossom);
+  color: white;
+  box-shadow: 0 6px 18px rgba(232, 136, 171, 0.4);
+}
+.btn-primary:hover { background: var(--blossom-deep); }
+
+.btn-ghost {
+  background: var(--glass-fill-strong);
+  color: var(--ink);
+  border: 1px solid var(--glass-border);
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+}
+
+.topbar h1 {
+  font-size: 1.4rem;
+  letter-spacing: 0.02em;
+}
+
+.topbar .subtitle {
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+  margin-top: 2px;
+}
+
+.container {
+  flex: 1;
+  padding: 0 20px 40px;
+  max-width: 720px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* Focus visibility for accessibility */
+:focus-visible {
+  outline: 2px solid var(--blossom-deep);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}

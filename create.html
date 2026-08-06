@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Add Cards — Recall Manual</title>
+<link rel="stylesheet" href="css/theme.css" />
+<style>
+  .back-link { font-size: 0.85rem; color: var(--ink-soft); }
+  .deck-label { font-size: 0.9rem; color: var(--ink-soft); margin: -6px 0 16px; }
+
+  .mode-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 18px;
+  }
+  .mode-tabs button {
+    flex: 1;
+    padding: 10px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--glass-border);
+    background: var(--glass-fill);
+    color: var(--ink-soft);
+    font-weight: 600;
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+  .mode-tabs button.active {
+    background: var(--blossom);
+    color: white;
+    border-color: transparent;
+  }
+
+  .side-toggle {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+  .side-toggle button {
+    flex: 1;
+    padding: 8px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--glass-border);
+    background: rgba(255,255,255,0.5);
+    color: var(--ink);
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .side-toggle button.active {
+    background: var(--glass-fill-strong);
+    box-shadow: inset 0 0 0 2px var(--blossom);
+  }
+  .side-toggle .filled-dot {
+    display: inline-block;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--tag-green);
+    margin-left: 6px;
+  }
+
+  .editor-panel { padding: 18px; }
+
+  textarea.text-input {
+    width: 100%;
+    min-height: 140px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--glass-border);
+    background: rgba(255,255,255,0.7);
+    padding: 14px;
+    font-family: var(--font-body);
+    font-size: 0.95rem;
+    resize: vertical;
+  }
+
+  canvas.draw-canvas {
+    width: 100%;
+    height: 260px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--glass-border);
+    touch-action: none;
+    background: white;
+  }
+  .draw-tools { display: flex; justify-content: flex-end; margin-top: 8px; }
+  .draw-tools button {
+    font-size: 0.78rem;
+    padding: 6px 12px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--glass-border);
+    background: rgba(255,255,255,0.6);
+    cursor: pointer;
+  }
+
+  .photo-drop {
+    border: 2px dashed var(--glass-border);
+    border-radius: var(--radius-sm);
+    padding: 30px;
+    text-align: center;
+    color: var(--ink-soft);
+    cursor: pointer;
+    font-size: 0.85rem;
+  }
+  .photo-preview { width: 100%; border-radius: var(--radius-sm); margin-top: 10px; display: none; }
+
+  .save-row { margin-top: 20px; display: flex; gap: 10px; }
+  .save-row button { flex: 1; }
+
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--ink);
+    color: white;
+    padding: 10px 18px;
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<canvas id="sakura-canvas"></canvas>
+
+<div class="app-shell">
+  <div class="topbar">
+    <div>
+      <a class="back-link" href="index.html">&larr; Decks</a>
+      <h1 style="margin-top:4px">Add a card</h1>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="deck-label" id="deckLabel">Loading deck…</div>
+
+    <div class="mode-tabs">
+      <button data-mode="text" class="active">Type</button>
+      <button data-mode="draw">Draw</button>
+      <button data-mode="photo">Photo</button>
+    </div>
+
+    <div class="side-toggle">
+      <button data-side="front" class="active">Front <span class="filled-dot" id="frontDot" style="display:none"></span></button>
+      <button data-side="back">Back <span class="filled-dot" id="backDot" style="display:none"></span></button>
+    </div>
+
+    <div class="glass editor-panel">
+      <!-- Text mode -->
+      <div class="mode-panel" data-panel="text">
+        <textarea class="text-input" id="textInputFront" placeholder="Front side text…"></textarea>
+        <textarea class="text-input" id="textInputBack" placeholder="Back side text…" style="display:none"></textarea>
+      </div>
+
+      <!-- Draw mode -->
+      <div class="mode-panel" data-panel="draw" style="display:none">
+        <canvas class="draw-canvas" id="drawCanvasFront"></canvas>
+        <canvas class="draw-canvas" id="drawCanvasBack" style="display:none"></canvas>
+        <div class="draw-tools">
+          <button id="clearDrawBtn">Clear</button>
+        </div>
+      </div>
+
+      <!-- Photo mode -->
+      <div class="mode-panel" data-panel="photo" style="display:none">
+        <div class="photo-drop" id="photoDropFront">Tap to capture or choose a photo (front)</div>
+        <img class="photo-preview" id="photoPreviewFront" />
+        <input type="file" accept="image/*" capture="environment" id="photoInputFront" style="display:none" />
+
+        <div class="photo-drop" id="photoDropBack" style="display:none; margin-top:14px">Tap to capture or choose a photo (back)</div>
+        <img class="photo-preview" id="photoPreviewBack" style="display:none" />
+        <input type="file" accept="image/*" capture="environment" id="photoInputBack" style="display:none" />
+      </div>
+    </div>
+
+    <div class="save-row">
+      <button class="btn btn-ghost" id="saveAddAnotherBtn" style="flex:1">Save &amp; add another</button>
+      <button class="btn btn-primary" id="saveDoneBtn" style="flex:1">Save &amp; finish</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="js/db.js"></script>
+<script src="js/sakura.js"></script>
+<script src="js/canvas-draw.js"></script>
+<script src="js/camera-capture.js"></script>
+<script>
+  initSakura();
+
+  const params = new URLSearchParams(window.location.search);
+  const deckId = params.get('deck');
+  if (!deckId) window.location.href = 'index.html';
+
+  let currentMode = 'text';
+  let currentSide = 'front';
+
+  const state = {
+    text: { front: '', back: '' },
+    drawBlob: { front: null, back: null },
+    photoBlob: { front: null, back: null },
+  };
+
+  RecallDB.Decks.get(deckId).then((deck) => {
+    document.getElementById('deckLabel').textContent = deck ? `Adding to: ${deck.name}` : 'Deck not found';
+  });
+
+  // Mode tabs
+  document.querySelectorAll('.mode-tabs button').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.mode-tabs button').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentMode = btn.dataset.mode;
+      document.querySelectorAll('.mode-panel').forEach((p) => {
+        p.style.display = p.dataset.panel === currentMode ? 'block' : 'none';
+      });
+    });
+  });
+
+  // Side toggle
+  document.querySelectorAll('.side-toggle button').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.side-toggle button').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentSide = btn.dataset.side;
+      updateSideVisibility();
+    });
+  });
+
+  function updateSideVisibility() {
+    document.getElementById('textInputFront').style.display = currentSide === 'front' ? 'block' : 'none';
+    document.getElementById('textInputBack').style.display = currentSide === 'back' ? 'block' : 'none';
+    document.getElementById('drawCanvasFront').style.display = currentSide === 'front' ? 'block' : 'none';
+    document.getElementById('drawCanvasBack').style.display = currentSide === 'back' ? 'block' : 'none';
+    document.getElementById('photoDropFront').style.display = currentSide === 'front' ? 'block' : 'none';
+    document.getElementById('photoPreviewFront').style.display = currentSide === 'front' && state.photoBlob.front ? 'block' : 'none';
+    document.getElementById('photoDropBack').style.display = currentSide === 'back' ? 'block' : 'none';
+    document.getElementById('photoPreviewBack').style.display = currentSide === 'back' && state.photoBlob.back ? 'block' : 'none';
+  }
+
+  document.getElementById('textInputFront').addEventListener('input', (e) => (state.text.front = e.target.value));
+  document.getElementById('textInputBack').addEventListener('input', (e) => (state.text.back = e.target.value));
+
+  // Draw pads
+  const drawPadFront = createDrawPad(document.getElementById('drawCanvasFront'));
+  const drawPadBack = createDrawPad(document.getElementById('drawCanvasBack'));
+  document.getElementById('clearDrawBtn').addEventListener('click', () => {
+    (currentSide === 'front' ? drawPadFront : drawPadBack).clear();
+  });
+
+  // Photo capture
+  function wirePhoto(side) {
+    const drop = document.getElementById(`photoDrop${cap(side)}`);
+    const input = document.getElementById(`photoInput${cap(side)}`);
+    const preview = document.getElementById(`photoPreview${cap(side)}`);
+    drop.addEventListener('click', () => input.click());
+    input.addEventListener('change', async () => {
+      const file = input.files[0];
+      if (!file) return;
+      const blob = await compressImageFile(file);
+      state.photoBlob[side] = blob;
+      preview.src = URL.createObjectURL(blob);
+      preview.style.display = 'block';
+      drop.textContent = 'Tap to replace photo';
+    });
+  }
+  wirePhoto('front');
+  wirePhoto('back');
+  function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+  async function buildCardPayload() {
+    const card = { deckId, type: currentMode, front: {}, back: {} };
+
+    if (currentMode === 'text') {
+      card.front.text = state.text.front.trim();
+      card.back.text = state.text.back.trim();
+      if (!card.front.text && !card.back.text) return null;
+    } else if (currentMode === 'draw') {
+      const frontEmpty = drawPadFront.isEmpty();
+      const backEmpty = drawPadBack.isEmpty();
+      if (frontEmpty && backEmpty) return null;
+      if (!frontEmpty) card.front.imageBlob = await drawPadFront.toBlob();
+      if (!backEmpty) card.back.imageBlob = await drawPadBack.toBlob();
+    } else if (currentMode === 'photo') {
+      if (!state.photoBlob.front && !state.photoBlob.back) return null;
+      if (state.photoBlob.front) card.front.imageBlob = state.photoBlob.front;
+      if (state.photoBlob.back) card.back.imageBlob = state.photoBlob.back;
+    }
+    return card;
+  }
+
+  function resetForm() {
+    document.getElementById('textInputFront').value = '';
+    document.getElementById('textInputBack').value = '';
+    state.text = { front: '', back: '' };
+    drawPadFront.clear();
+    drawPadBack.clear();
+    state.photoBlob = { front: null, back: null };
+    document.getElementById('photoPreviewFront').style.display = 'none';
+    document.getElementById('photoPreviewBack').style.display = 'none';
+    document.getElementById('photoDropFront').textContent = 'Tap to capture or choose a photo (front)';
+    document.getElementById('photoDropBack').textContent = 'Tap to capture or choose a photo (back)';
+  }
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 1400);
+  }
+
+  async function saveCard() {
+    const payload = await buildCardPayload();
+    if (!payload) {
+      showToast('Add some content first');
+      return false;
+    }
+    await RecallDB.Cards.create(payload);
+    return true;
+  }
+
+  document.getElementById('saveAddAnotherBtn').addEventListener('click', async () => {
+    if (await saveCard()) {
+      showToast('Card saved 🌸');
+      resetForm();
+    }
+  });
+
+  document.getElementById('saveDoneBtn').addEventListener('click', async () => {
+    if (await saveCard()) {
+      window.location.href = `study.html?deck=${deckId}`;
+    }
+  });
+</script>
+</body>
+</html>

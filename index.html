@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Recall Manual</title>
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#f7a8c4" />
+<link rel="stylesheet" href="css/theme.css" />
+<style>
+  .deck-grid {
+    display: grid;
+    gap: 16px;
+    margin-top: 20px;
+  }
+  .deck-card {
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+  }
+  .deck-card:hover { box-shadow: 0 12px 36px rgba(180, 120, 145, 0.26); }
+  .deck-info h3 { font-size: 1.05rem; }
+  .deck-info p { margin: 4px 0 0; font-size: 0.82rem; color: var(--ink-soft); }
+  .deck-actions { display: flex; gap: 8px; }
+  .deck-actions button {
+    background: var(--glass-fill-strong);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+    padding: 8px 14px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .deck-actions .study-btn { background: var(--blossom); color: white; border: none; }
+
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--ink-soft);
+  }
+  .empty-state h2 { font-family: var(--font-display); color: var(--ink); margin-bottom: 8px; }
+
+  .fab {
+    position: fixed;
+    bottom: 28px;
+    right: 24px;
+    z-index: 2;
+    width: 58px;
+    height: 58px;
+    border-radius: 50%;
+    background: var(--blossom);
+    color: white;
+    font-size: 1.8rem;
+    border: none;
+    box-shadow: 0 10px 26px rgba(232, 136, 171, 0.45);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .new-deck-form {
+    display: none;
+    margin-top: 18px;
+    padding: 18px;
+    gap: 10px;
+    flex-direction: column;
+  }
+  .new-deck-form.open { display: flex; }
+  .new-deck-form input {
+    padding: 12px 14px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--glass-border);
+    background: rgba(255,255,255,0.7);
+    font-family: var(--font-body);
+    font-size: 0.9rem;
+  }
+  .new-deck-form .row { display: flex; gap: 10px; }
+  .new-deck-form .row input { flex: 1; }
+
+  .storage-note {
+    margin-top: 24px;
+    font-size: 0.75rem;
+    color: var(--ink-soft);
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+<canvas id="sakura-canvas"></canvas>
+
+<div class="app-shell">
+  <div class="topbar">
+    <div>
+      <h1>Recall Manual 🌸</h1>
+      <div class="subtitle">Your cards, your handwriting, your pace</div>
+    </div>
+  </div>
+
+  <div class="container">
+    <div id="newDeckForm" class="glass new-deck-form">
+      <input id="deckName" type="text" placeholder="Deck name, e.g. Pharmacology — Antibiotics" />
+      <div class="row">
+        <input id="deckSubject" type="text" placeholder="Subject (optional)" />
+        <input id="deckSubtopic" type="text" placeholder="Subtopic (optional)" />
+      </div>
+      <div class="row">
+        <button class="btn btn-primary" id="saveDeckBtn" style="flex:1">Create deck</button>
+        <button class="btn btn-ghost" id="cancelDeckBtn">Cancel</button>
+      </div>
+    </div>
+
+    <div id="deckGrid" class="deck-grid"></div>
+    <div id="emptyState" class="empty-state" style="display:none">
+      <h2>No decks yet</h2>
+      <p>Tap the + button to create your first deck, then add cards by typing, drawing, or photo.</p>
+    </div>
+
+    <div class="storage-note" id="storageNote"></div>
+  </div>
+</div>
+
+<button class="fab" id="addDeckFab" aria-label="New deck">+</button>
+
+<script src="js/db.js"></script>
+<script src="js/sakura.js"></script>
+<script>
+  initSakura();
+
+  const deckGrid = document.getElementById('deckGrid');
+  const emptyState = document.getElementById('emptyState');
+  const newDeckForm = document.getElementById('newDeckForm');
+  const addDeckFab = document.getElementById('addDeckFab');
+  const cancelDeckBtn = document.getElementById('cancelDeckBtn');
+  const saveDeckBtn = document.getElementById('saveDeckBtn');
+
+  addDeckFab.addEventListener('click', () => {
+    newDeckForm.classList.toggle('open');
+    document.getElementById('deckName').focus();
+  });
+  cancelDeckBtn.addEventListener('click', () => newDeckForm.classList.remove('open'));
+
+  saveDeckBtn.addEventListener('click', async () => {
+    const name = document.getElementById('deckName').value.trim();
+    if (!name) return;
+    const subject = document.getElementById('deckSubject').value.trim();
+    const subtopic = document.getElementById('deckSubtopic').value.trim();
+    await RecallDB.Decks.create({ name, subject, subtopic });
+    document.getElementById('deckName').value = '';
+    document.getElementById('deckSubject').value = '';
+    document.getElementById('deckSubtopic').value = '';
+    newDeckForm.classList.remove('open');
+    renderDecks();
+  });
+
+  async function renderDecks() {
+    const decks = await RecallDB.Decks.all();
+    deckGrid.innerHTML = '';
+    emptyState.style.display = decks.length ? 'none' : 'block';
+
+    for (const deck of decks) {
+      const count = await RecallDB.Cards.count(deck.id);
+      const el = document.createElement('div');
+      el.className = 'glass deck-card';
+      el.innerHTML = `
+        <div class="deck-info">
+          <h3>${escapeHtml(deck.name)}</h3>
+          <p>${count} card${count === 1 ? '' : 's'}${deck.subject ? ' · ' + escapeHtml(deck.subject) : ''}</p>
+        </div>
+        <div class="deck-actions">
+          <button class="add-btn">Add cards</button>
+          <button class="study-btn">Study</button>
+        </div>
+      `;
+      el.querySelector('.add-btn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        window.location.href = `create.html?deck=${deck.id}`;
+      });
+      el.querySelector('.study-btn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        window.location.href = `study.html?deck=${deck.id}`;
+      });
+      deckGrid.appendChild(el);
+    }
+
+    const est = await RecallDB.estimateStorage();
+    if (est) {
+      const usedMB = (est.usage / (1024 * 1024)).toFixed(1);
+      const quotaMB = (est.quota / (1024 * 1024)).toFixed(0);
+      document.getElementById('storageNote').textContent = `${usedMB} MB used of ~${quotaMB} MB available on this device`;
+    }
+  }
+
+  function escapeHtml(str) {
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+  }
+
+  renderDecks();
+
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    });
+  }
+</script>
+</body>
+</html>
