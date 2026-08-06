@@ -41,6 +41,26 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+
+  const url = new URL(event.request.url);
+  const isAppScript = url.origin === self.location.origin && url.pathname.endsWith('.js');
+
+  if (isAppScript) {
+    // Network-first for our own JS: always try to get the latest code first,
+    // only fall back to cache if offline. Avoids silently serving stale
+    // config/logic after a deploy (bit us once already with firebase-init.js).
+    event.respondWith(
+      fetch(event.request)
+        .then((res) => {
+          const clone = res.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          return res;
+        })
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request).then((cached) => {
       if (cached) return cached;
