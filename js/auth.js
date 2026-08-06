@@ -31,6 +31,7 @@ const RecallAuth = (function () {
   });
 
   // Capture the result of a redirect-based sign-in (runs once on page load).
+  let redirectError = null;
   const redirectResultPromise = firebase.auth().getRedirectResult()
     .then((result) => {
       redirectResultChecked = true;
@@ -47,6 +48,7 @@ const RecallAuth = (function () {
     })
     .catch((err) => {
       redirectResultChecked = true;
+      redirectError = err;
       console.error('Redirect sign-in error', err);
       return null;
     });
@@ -67,6 +69,10 @@ const RecallAuth = (function () {
     return currentUser;
   }
 
+  function getRedirectError() {
+    return redirectError;
+  }
+
   return {
     signIn,
     signOut: signOutUser,
@@ -74,6 +80,7 @@ const RecallAuth = (function () {
     getCurrentUser,
     DRIVE_SCOPE,
     redirectResultPromise,
+    getRedirectError,
   };
 })();
 

@@ -199,11 +199,12 @@
 <script>
   initSakura();
 
-  function showToast(msg) {
+  function showToast(msg, duration = 1800) {
     const t = document.getElementById('toast');
     t.textContent = msg;
     t.classList.add('show');
-    setTimeout(() => t.classList.remove('show'), 1800);
+    clearTimeout(showToast._timer);
+    showToast._timer = setTimeout(() => t.classList.remove('show'), duration);
   }
 
   /* ---- Auth + sync UI ---- */
@@ -245,6 +246,16 @@
       }
     } else {
       renderSignedOut();
+    }
+  });
+
+  // Surface any redirect sign-in failure directly on screen, since we can't
+  // see the tablet's console. This runs once, after Firebase has had a
+  // chance to process the return-from-Google redirect.
+  RecallAuth.redirectResultPromise.then(() => {
+    const err = RecallAuth.getRedirectError();
+    if (err) {
+      showToast(`Sign-in failed: ${err.code || ''} ${err.message || err}`, 6000);
     }
   });
 
