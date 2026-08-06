@@ -15,6 +15,9 @@ const ASSETS = [
   'js/study.js',
   'js/canvas-draw.js',
   'js/camera-capture.js',
+  'js/backup.js',
+  'icons/icon-192.png',
+  'icons/icon-512.png',
 ];
 
 self.addEventListener('install', (event) => {

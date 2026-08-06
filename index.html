@@ -87,6 +87,31 @@
     color: var(--ink-soft);
     text-align: center;
   }
+
+  .backup-row {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-top: 14px;
+  }
+  .backup-row button { font-size: 0.78rem; padding: 8px 14px; }
+
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--ink);
+    color: white;
+    padding: 10px 18px;
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+    z-index: 5;
+  }
+  .toast.show { opacity: 1; }
 </style>
 </head>
 <body>
@@ -120,15 +145,52 @@
     </div>
 
     <div class="storage-note" id="storageNote"></div>
+
+    <div class="backup-row">
+      <button class="btn btn-ghost" id="exportBtn">Export all data</button>
+      <button class="btn btn-ghost" id="importBtn">Import backup</button>
+      <input type="file" id="importFile" accept="application/json" style="display:none" />
+    </div>
   </div>
 </div>
 
 <button class="fab" id="addDeckFab" aria-label="New deck">+</button>
+<div class="toast" id="toast"></div>
 
 <script src="js/db.js"></script>
 <script src="js/sakura.js"></script>
+<script src="js/backup.js"></script>
 <script>
   initSakura();
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 1800);
+  }
+
+  document.getElementById('exportBtn').addEventListener('click', async () => {
+    showToast('Preparing export…');
+    await RecallBackup.exportAllData();
+  });
+
+  document.getElementById('importBtn').addEventListener('click', () => {
+    document.getElementById('importFile').click();
+  });
+
+  document.getElementById('importFile').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const { deckCount, cardCount } = await RecallBackup.importDataFromFile(file);
+      showToast(`Imported ${deckCount} deck(s), ${cardCount} card(s)`);
+      renderDecks();
+    } catch (err) {
+      showToast('Import failed: ' + err.message);
+    }
+    e.target.value = '';
+  });
 
   const deckGrid = document.getElementById('deckGrid');
   const emptyState = document.getElementById('emptyState');
