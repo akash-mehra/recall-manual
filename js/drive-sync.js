@@ -1,5 +1,5 @@
-/* drive-sync.js — automatic background sync of the full deck/card backup
-   to Google Drive's hidden appDataFolder.
+/* drive-sync.js — background sync of the full deck/card backup to Google
+   Drive's hidden appDataFolder, with a configurable frequency.
 
    Strategy: whole-database, last-write-wins. This is NOT a merge — the
    backup is always the complete state of one device. If you edit on two
@@ -7,7 +7,17 @@
    For a single-user study app this is a reasonable tradeoff for simplicity;
    flagged here in case that ever surprises you.
 
-   Token handling now lives entirely in auth.js (RecallAuth.getAccessToken),
+   Sync frequency (set from settings.html, stored in localStorage):
+   - 'auto'   : pushes ~6s after your last edit (debounced)
+   - 'hourly' : pushes if dirty, checked periodically while the app is open
+   - 'daily'  : same, on a 24h threshold
+   - 'manual' : never pushes automatically — only via "Backup now"
+
+   Caveat: 'hourly'/'daily' only run while the app is actually open in a
+   tab. This is a browser PWA, not a native app with guaranteed background
+   execution — there's no way around this without a server component.
+
+   Token handling lives entirely in auth.js (RecallAuth.getAccessToken),
    since sign-in itself is done via the same Google Identity Services token
    client — one grant covers both identity and this Drive scope.
 */
@@ -16,9 +26,13 @@ const BACKUP_FILE_NAME = 'recall-manual-backup.json';
 const AUTO_SYNC_DEBOUNCE_MS = 6000;
 const LAST_LOCAL_CHANGE_KEY = 'recall_manual_last_local_change';
 const LAST_SYNCED_AT_KEY = 'recall_manual_last_synced_at';
+const SYNC_MODE_KEY = 'recall_manual_sync_mode';
+const PERIODIC_CHECK_MS = 5 * 60 * 1000; // check every 5 min while app is open
+const FREQUENCY_MS = { hourly: 60 * 60 * 1000, daily: 24 * 60 * 60 * 1000 };
 
 const RecallSync = (function () {
   let debounceTimer = null;
+  let periodicTimer = null;
   let statusListeners = [];
 
   function setStatus(status, detail) {
@@ -26,6 +40,20 @@ const RecallSync = (function () {
   }
   function onStatus(fn) {
     statusListeners.push(fn);
+  }
+
+  function getSyncMode() {
+    return localStorage.getItem(SYNC_MODE_KEY) || 'auto';
+  }
+
+  function setSyncMode(mode) {
+    localStorage.setItem(SYNC_MODE_KEY, mode);
+    schedulePeriodicCheck();
+  }
+
+  function getLastSyncedAt() {
+    const v = Number(localStorage.getItem(LAST_SYNCED_AT_KEY) || 0);
+    return v || null;
   }
 
   async function driveFetch(url, options = {}) {
@@ -87,8 +115,11 @@ const RecallSync = (function () {
   function markDirty() {
     localStorage.setItem(LAST_LOCAL_CHANGE_KEY, String(Date.now()));
     if (!RecallAuth.getCurrentUser()) return; // not signed in, nothing to sync
-    clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(pushIfDirty, AUTO_SYNC_DEBOUNCE_MS);
+    if (getSyncMode() === 'auto') {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(pushIfDirty, AUTO_SYNC_DEBOUNCE_MS);
+    }
+    // hourly/daily/manual: periodic timer or explicit "Backup now" handles it
   }
 
   async function pushIfDirty() {
@@ -104,6 +135,41 @@ const RecallSync = (function () {
       console.error('Drive sync push failed', err);
       setStatus('error', err.message);
     }
+  }
+
+  /* Explicit manual trigger from settings — always pushes, even if nothing
+     changed, so the user gets a clear "just backed up" confirmation. */
+  async function backupNow() {
+    if (!RecallAuth.getCurrentUser()) {
+      throw new Error('Sign in first to back up to Drive');
+    }
+    setStatus('syncing');
+    try {
+      const existing = await findBackupFile();
+      await uploadBackup(existing ? existing.id : null);
+      setStatus('synced');
+    } catch (err) {
+      console.error('Manual backup failed', err);
+      setStatus('error', err.message);
+      throw err;
+    }
+  }
+
+  function schedulePeriodicCheck() {
+    clearInterval(periodicTimer);
+    const mode = getSyncMode();
+    const threshold = FREQUENCY_MS[mode];
+    if (!threshold) return; // auto and manual don't use the periodic timer
+
+    periodicTimer = setInterval(() => {
+      if (!RecallAuth.getCurrentUser()) return;
+      const lastChange = Number(localStorage.getItem(LAST_LOCAL_CHANGE_KEY) || 0);
+      const lastSynced = Number(localStorage.getItem(LAST_SYNCED_AT_KEY) || 0);
+      const dueForSync = Date.now() - lastSynced >= threshold;
+      if (lastChange > lastSynced && dueForSync) {
+        pushIfDirty();
+      }
+    }, PERIODIC_CHECK_MS);
   }
 
   /* Called once right after sign-in: reconciles local vs remote before
@@ -147,10 +213,28 @@ const RecallSync = (function () {
       console.error('Drive sync reconciliation failed', err);
       setStatus('error', err.message);
       return { action: 'error', message: err.message };
+    } finally {
+      schedulePeriodicCheck();
     }
   }
 
-  return { markDirty, reconcileOnSignIn, pushIfDirty, onStatus };
+  return {
+    markDirty,
+    reconcileOnSignIn,
+    pushIfDirty,
+    backupNow,
+    onStatus,
+    getSyncMode,
+    setSyncMode,
+    getLastSyncedAt,
+    _schedulePeriodicCheck: schedulePeriodicCheck,
+  };
 })();
 
 window.RecallSync = RecallSync;
+
+// Keep the periodic hourly/daily check running on whichever page happens to
+// be open, not just the dashboard — study.html and create.html need it too.
+RecallAuth.onAuthChange((user) => {
+  if (user) RecallSync._schedulePeriodicCheck();
+});

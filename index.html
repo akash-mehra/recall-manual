@@ -126,6 +126,52 @@
   }
   .backup-row button { font-size: 0.78rem; padding: 8px 14px; }
 
+  .settings-link {
+    background: var(--glass-fill-strong);
+    border: 1px solid var(--glass-border);
+    border-radius: 50%;
+    width: 36px; height: 36px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.1rem;
+    cursor: pointer;
+    text-decoration: none;
+  }
+
+  .auth-gate {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
+  }
+  .auth-gate-card {
+    max-width: 360px;
+    width: 100%;
+    padding: 40px 30px;
+    text-align: center;
+  }
+  .gate-icon { font-size: 2.4rem; margin-bottom: 6px; }
+  .auth-gate-card h1 { font-size: 1.6rem; margin-bottom: 10px; }
+  .gate-sub {
+    font-size: 0.85rem;
+    color: var(--ink-soft);
+    line-height: 1.5;
+    margin-bottom: 26px;
+  }
+  .auth-gate-card .btn { width: 100%; margin-bottom: 10px; }
+  .gate-skip-btn {
+    background: none;
+    border: none;
+    font-size: 0.8rem;
+    color: var(--ink-soft);
+    text-decoration: underline;
+    cursor: pointer;
+    padding: 6px;
+  }
+
   .toast {
     position: fixed;
     bottom: 24px;
@@ -147,13 +193,26 @@
 <body>
 <canvas id="sakura-canvas"></canvas>
 
-<div class="app-shell">
+<div id="authGate" class="auth-gate" style="display:none">
+  <div class="glass auth-gate-card">
+    <div class="gate-icon">🌸</div>
+    <h1>Recall Manual</h1>
+    <p class="gate-sub">Sign in with Google to back up your decks to Drive and keep them in sync. Or skip it and keep everything local to this device only.</p>
+    <button class="btn btn-primary" id="gateSignInBtn">Sign in with Google</button>
+    <button class="gate-skip-btn" id="gateSkipBtn">Continue without an account</button>
+  </div>
+</div>
+
+<div class="app-shell" style="display:none">
   <div class="topbar">
     <div>
       <h1>Recall Manual 🌸</h1>
       <div class="subtitle">Your cards, your handwriting, your pace</div>
     </div>
-    <div id="authArea" class="auth-area"></div>
+    <div style="display:flex; align-items:center; gap:10px;">
+      <div id="authArea" class="auth-area"></div>
+      <a class="settings-link" href="settings.html" aria-label="Settings">⚙️</a>
+    </div>
   </div>
 
   <div class="container">
@@ -176,16 +235,10 @@
     </div>
 
     <div class="storage-note" id="storageNote"></div>
-
-    <div class="backup-row">
-      <button class="btn btn-ghost" id="exportBtn">Export all data</button>
-      <button class="btn btn-ghost" id="importBtn">Import backup</button>
-      <input type="file" id="importFile" accept="application/json" style="display:none" />
-    </div>
   </div>
 </div>
 
-<button class="fab" id="addDeckFab" aria-label="New deck">+</button>
+<button class="fab" id="addDeckFab" aria-label="New deck" style="display:none">+</button>
 <div class="toast" id="toast"></div>
 
 <script src="js/auth.js"></script>
@@ -204,7 +257,42 @@
     showToast._timer = setTimeout(() => t.classList.remove('show'), duration);
   }
 
-  /* ---- Auth + sync UI ---- */
+  /* ---- Sign-in gate: shown first, app content hidden until resolved ---- */
+  const authGate = document.getElementById('authGate');
+  const appShell = document.querySelector('.app-shell');
+  const addDeckFab = document.getElementById('addDeckFab');
+  const SKIP_AUTH_KEY = 'recall_manual_skip_auth';
+  let gateResolved = false;
+
+  function showApp() {
+    authGate.style.display = 'none';
+    appShell.style.display = '';
+    addDeckFab.style.display = 'flex';
+    renderDecks();
+  }
+
+  function showGate() {
+    appShell.style.display = 'none';
+    addDeckFab.style.display = 'none';
+    authGate.style.display = 'flex';
+  }
+
+  document.getElementById('gateSignInBtn').addEventListener('click', async () => {
+    try {
+      await RecallAuth.signIn();
+    } catch (err) {
+      const code = err && err.error ? err.error : (err && err.message) || 'unknown error';
+      showToast(`Sign-in failed: ${code}`, 5000);
+    }
+  });
+
+  document.getElementById('gateSkipBtn').addEventListener('click', () => {
+    localStorage.setItem(SKIP_AUTH_KEY, '1');
+    gateResolved = true;
+    showApp();
+  });
+
+  /* ---- Auth + sync UI (topbar, once inside the app) ---- */
   const authArea = document.getElementById('authArea');
 
   function renderSignedOut() {
@@ -226,16 +314,16 @@
         <img src="${user.photoURL || ''}" alt="" onerror="this.style.display='none'" />
         <span class="name">${user.displayName || user.email || ''}</span>
       </div>
-      <button class="sign-out-btn" id="signOutBtn">Sign out</button>
     `;
-    document.getElementById('signOutBtn').addEventListener('click', () => {
-      RecallAuth.signOut();
-    });
   }
 
   RecallAuth.onAuthChange(async (user) => {
     if (user) {
       renderSignedIn(user);
+      if (!gateResolved) {
+        gateResolved = true;
+        showApp();
+      }
       const result = await RecallSync.reconcileOnSignIn();
       if (result.action === 'pulled') {
         showToast(`Synced from Drive: ${result.deckCount} deck(s) restored`);
@@ -247,6 +335,14 @@
       }
     } else {
       renderSignedOut();
+      if (!gateResolved) {
+        if (localStorage.getItem(SKIP_AUTH_KEY)) {
+          gateResolved = true;
+          showApp();
+        } else {
+          showGate();
+        }
+      }
     }
   });
 
@@ -257,32 +353,9 @@
     badge.textContent = status === 'syncing' ? 'syncing…' : status === 'synced' ? 'synced' : status === 'error' ? 'sync error' : status;
   });
 
-  document.getElementById('exportBtn').addEventListener('click', async () => {
-    showToast('Preparing export…');
-    await RecallBackup.exportAllData();
-  });
-
-  document.getElementById('importBtn').addEventListener('click', () => {
-    document.getElementById('importFile').click();
-  });
-
-  document.getElementById('importFile').addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    try {
-      const { deckCount, cardCount } = await RecallBackup.importDataFromFile(file);
-      showToast(`Imported ${deckCount} deck(s), ${cardCount} card(s)`);
-      renderDecks();
-    } catch (err) {
-      showToast('Import failed: ' + err.message);
-    }
-    e.target.value = '';
-  });
-
   const deckGrid = document.getElementById('deckGrid');
   const emptyState = document.getElementById('emptyState');
   const newDeckForm = document.getElementById('newDeckForm');
-  const addDeckFab = document.getElementById('addDeckFab');
   const cancelDeckBtn = document.getElementById('cancelDeckBtn');
   const saveDeckBtn = document.getElementById('saveDeckBtn');
 

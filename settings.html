@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Settings — Recall Manual</title>
+<link rel="stylesheet" href="css/theme.css" />
+<style>
+  .back-link { font-size: 0.85rem; color: var(--ink-soft); }
+
+  .section {
+    padding: 20px;
+    margin-bottom: 18px;
+  }
+  .section h2 {
+    font-size: 1rem;
+    margin-bottom: 4px;
+  }
+  .section .section-sub {
+    font-size: 0.78rem;
+    color: var(--ink-soft);
+    margin-bottom: 16px;
+  }
+
+  .account-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .account-info { display: flex; align-items: center; gap: 10px; }
+  .account-info img { width: 40px; height: 40px; border-radius: 50%; }
+  .account-info .email { font-size: 0.78rem; color: var(--ink-soft); }
+
+  .freq-options {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .freq-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--glass-border);
+    background: rgba(255,255,255,0.4);
+    cursor: pointer;
+  }
+  .freq-option.selected {
+    background: var(--glass-fill-strong);
+    box-shadow: inset 0 0 0 2px var(--blossom);
+  }
+  .freq-option input { margin-top: 3px; }
+  .freq-option .freq-title { font-weight: 600; font-size: 0.9rem; }
+  .freq-option .freq-desc { font-size: 0.78rem; color: var(--ink-soft); margin-top: 2px; }
+
+  .sync-status-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 16px;
+    font-size: 0.8rem;
+    color: var(--ink-soft);
+  }
+
+  .sync-badge {
+    font-size: 0.7rem;
+    padding: 3px 9px;
+    border-radius: 20px;
+    background: rgba(255,255,255,0.6);
+    color: var(--ink-soft);
+  }
+  .sync-badge.syncing { color: var(--tag-yellow); }
+  .sync-badge.synced { color: var(--tag-green); }
+  .sync-badge.error { color: var(--tag-red); }
+
+  .backup-actions { display: flex; gap: 10px; margin-top: 16px; }
+  .backup-actions button { flex: 1; font-size: 0.85rem; }
+
+  .disabled-note {
+    text-align: center;
+    padding: 20px;
+    color: var(--ink-soft);
+    font-size: 0.85rem;
+  }
+
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--ink);
+    color: white;
+    padding: 10px 18px;
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+    z-index: 5;
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<canvas id="sakura-canvas"></canvas>
+
+<div class="app-shell">
+  <div class="topbar">
+    <div>
+      <a class="back-link" href="index.html">&larr; Decks</a>
+      <h1 style="margin-top:4px">Settings</h1>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="glass section" id="accountSection">
+      <h2>Account</h2>
+      <div class="section-sub">Sign in to back up your decks to Google Drive.</div>
+      <div id="accountContent"></div>
+    </div>
+
+    <div class="glass section" id="syncSection" style="display:none">
+      <h2>Backup frequency</h2>
+      <div class="section-sub">How often should Recall Manual push your data to Drive?</div>
+      <div class="freq-options">
+        <label class="freq-option" data-mode="auto">
+          <input type="radio" name="syncMode" value="auto" />
+          <div>
+            <div class="freq-title">Simultaneously</div>
+            <div class="freq-desc">Backs up a few seconds after any change — closest to real-time.</div>
+          </div>
+        </label>
+        <label class="freq-option" data-mode="hourly">
+          <input type="radio" name="syncMode" value="hourly" />
+          <div>
+            <div class="freq-title">Hourly</div>
+            <div class="freq-desc">Backs up at most once an hour while the app is open.</div>
+          </div>
+        </label>
+        <label class="freq-option" data-mode="daily">
+          <input type="radio" name="syncMode" value="daily" />
+          <div>
+            <div class="freq-title">Daily</div>
+            <div class="freq-desc">Backs up at most once a day while the app is open.</div>
+          </div>
+        </label>
+        <label class="freq-option" data-mode="manual">
+          <input type="radio" name="syncMode" value="manual" />
+          <div>
+            <div class="freq-title">Manual only</div>
+            <div class="freq-desc">Never backs up automatically — use the button below.</div>
+          </div>
+        </label>
+      </div>
+
+      <div class="sync-status-row">
+        <span id="lastSyncedText">Never synced</span>
+        <span class="sync-badge" id="settingsSyncBadge">idle</span>
+      </div>
+
+      <div class="backup-actions">
+        <button class="btn btn-primary" id="backupNowBtn" style="flex:1">Backup now</button>
+      </div>
+    </div>
+
+    <div class="glass section" id="signedOutNote" style="display:none">
+      <div class="disabled-note">Sign in above to enable Drive backup and choose a frequency.</div>
+    </div>
+
+    <div class="glass section">
+      <h2>Local backup</h2>
+      <div class="section-sub">Works without signing in — saves/restores a JSON file you keep yourself.</div>
+      <div class="backup-actions">
+        <button class="btn btn-ghost" id="exportBtn" style="flex:1">Export all data</button>
+        <button class="btn btn-ghost" id="importBtn" style="flex:1">Import backup</button>
+      </div>
+      <input type="file" id="importFile" accept="application/json" style="display:none" />
+    </div>
+
+    <div class="glass section">
+      <h2>Storage on this device</h2>
+      <div class="section-sub" id="storageNote">Calculating…</div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="js/auth.js"></script>
+<script src="js/db.js"></script>
+<script src="js/drive-sync.js"></script>
+<script src="js/sakura.js"></script>
+<script src="js/backup.js"></script>
+<script>
+  initSakura();
+
+  function showToast(msg, duration = 1800) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(showToast._timer);
+    showToast._timer = setTimeout(() => t.classList.remove('show'), duration);
+  }
+
+  const accountContent = document.getElementById('accountContent');
+  const syncSection = document.getElementById('syncSection');
+  const signedOutNote = document.getElementById('signedOutNote');
+
+  function renderSignedOut() {
+    accountContent.innerHTML = `<button class="btn btn-primary" id="settingsSignInBtn">Sign in with Google</button>`;
+    document.getElementById('settingsSignInBtn').addEventListener('click', async () => {
+      try {
+        await RecallAuth.signIn();
+      } catch (err) {
+        const code = err && err.error ? err.error : (err && err.message) || 'unknown error';
+        showToast(`Sign-in failed: ${code}`, 5000);
+      }
+    });
+    syncSection.style.display = 'none';
+    signedOutNote.style.display = 'block';
+  }
+
+  function renderSignedIn(user) {
+    accountContent.innerHTML = `
+      <div class="account-row">
+        <div class="account-info">
+          <img src="${user.photoURL || ''}" alt="" onerror="this.style.display='none'" />
+          <div>
+            <div>${user.displayName || ''}</div>
+            <div class="email">${user.email || ''}</div>
+          </div>
+        </div>
+        <button class="btn btn-ghost" id="settingsSignOutBtn">Sign out</button>
+      </div>
+    `;
+    document.getElementById('settingsSignOutBtn').addEventListener('click', () => {
+      RecallAuth.signOut();
+    });
+    syncSection.style.display = 'block';
+    signedOutNote.style.display = 'none';
+    renderSyncModeSelection();
+  }
+
+  function renderSyncModeSelection() {
+    const current = RecallSync.getSyncMode();
+    document.querySelectorAll('.freq-option').forEach((el) => {
+      const isSelected = el.dataset.mode === current;
+      el.classList.toggle('selected', isSelected);
+      el.querySelector('input').checked = isSelected;
+    });
+    updateLastSyncedText();
+  }
+
+  function updateLastSyncedText() {
+    const t = RecallSync.getLastSyncedAt();
+    const el = document.getElementById('lastSyncedText');
+    if (!t) {
+      el.textContent = 'Never synced';
+      return;
+    }
+    const mins = Math.round((Date.now() - t) / 60000);
+    if (mins < 1) el.textContent = 'Last synced just now';
+    else if (mins < 60) el.textContent = `Last synced ${mins} min ago`;
+    else if (mins < 24 * 60) el.textContent = `Last synced ${Math.round(mins / 60)} hr ago`;
+    else el.textContent = `Last synced ${Math.round(mins / (60 * 24))} day(s) ago`;
+  }
+
+  document.querySelectorAll('.freq-option').forEach((el) => {
+    el.addEventListener('click', () => {
+      const mode = el.dataset.mode;
+      RecallSync.setSyncMode(mode);
+      renderSyncModeSelection();
+      showToast(`Backup frequency set to ${mode}`);
+    });
+  });
+
+  document.getElementById('backupNowBtn').addEventListener('click', async () => {
+    try {
+      showToast('Backing up…');
+      await RecallSync.backupNow();
+      updateLastSyncedText();
+      showToast('Backed up to Drive 🌸');
+    } catch (err) {
+      showToast('Backup failed: ' + err.message, 4000);
+    }
+  });
+
+  RecallAuth.onAuthChange((user) => {
+    if (user) renderSignedIn(user);
+    else renderSignedOut();
+  });
+
+  RecallSync.onStatus((status) => {
+    const badge = document.getElementById('settingsSyncBadge');
+    if (!badge) return;
+    badge.className = 'sync-badge ' + status;
+    badge.textContent = status === 'syncing' ? 'syncing…' : status === 'synced' ? 'synced' : status === 'error' ? 'sync error' : status;
+    if (status === 'synced') updateLastSyncedText();
+  });
+
+  document.getElementById('exportBtn').addEventListener('click', async () => {
+    showToast('Preparing export…');
+    await RecallBackup.exportAllData();
+  });
+
+  document.getElementById('importBtn').addEventListener('click', () => {
+    document.getElementById('importFile').click();
+  });
+
+  document.getElementById('importFile').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const { deckCount, cardCount } = await RecallBackup.importDataFromFile(file);
+      showToast(`Imported ${deckCount} deck(s), ${cardCount} card(s)`);
+    } catch (err) {
+      showToast('Import failed: ' + err.message);
+    }
+    e.target.value = '';
+  });
+
+  RecallDB.estimateStorage().then((est) => {
+    if (est) {
+      const usedMB = (est.usage / (1024 * 1024)).toFixed(1);
+      const quotaMB = (est.quota / (1024 * 1024)).toFixed(0);
+      document.getElementById('storageNote').textContent = `${usedMB} MB used of ~${quotaMB} MB available on this device`;
+    } else {
+      document.getElementById('storageNote').textContent = 'Storage estimate not available on this browser';
+    }
+  });
+</script>
+</body>
+</html>
