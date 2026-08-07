@@ -7,10 +7,9 @@
    For a single-user study app this is a reasonable tradeoff for simplicity;
    flagged here in case that ever surprises you.
 
-   Token handling: Firebase's popup sign-in gives us an initial Drive access
-   token, but Firebase does not refresh it. We use Google Identity Services
-   (GIS) to silently re-request a token (no popup) once the initial one is
-   close to expiring, as long as the user has already granted consent.
+   Token handling now lives entirely in auth.js (RecallAuth.getAccessToken),
+   since sign-in itself is done via the same Google Identity Services token
+   client — one grant covers both identity and this Drive scope.
 */
 
 const BACKUP_FILE_NAME = 'recall-manual-backup.json';
@@ -21,8 +20,6 @@ const LAST_SYNCED_AT_KEY = 'recall_manual_last_synced_at';
 const RecallSync = (function () {
   let debounceTimer = null;
   let statusListeners = [];
-  let gisInited = false;
-  let tokenClient = null;
 
   function setStatus(status, detail) {
     statusListeners.forEach((fn) => fn(status, detail));
@@ -31,55 +28,8 @@ const RecallSync = (function () {
     statusListeners.push(fn);
   }
 
-  function loadGisScript() {
-    return new Promise((resolve, reject) => {
-      if (window.google && window.google.accounts && window.google.accounts.oauth2) {
-        return resolve();
-      }
-      const script = document.createElement('script');
-      script.src = 'https://accounts.google.com/gsi/client';
-      script.onload = resolve;
-      script.onerror = reject;
-      document.head.appendChild(script);
-    });
-  }
-
-  async function ensureGisReady() {
-    if (gisInited) return;
-    await loadGisScript();
-    tokenClient = google.accounts.oauth2.initTokenClient({
-      client_id: window.RecallFirebase.googleOAuthClientId,
-      scope: RecallAuth.DRIVE_SCOPE,
-      callback: () => {}, // overridden per-call below
-    });
-    gisInited = true;
-  }
-
-  function requestTokenSilently() {
-    return new Promise((resolve, reject) => {
-      tokenClient.callback = (resp) => {
-        if (resp.error) return reject(resp);
-        window.RecallDriveTokenCache = {
-          token: resp.access_token,
-          expiresAt: Date.now() + (resp.expires_in ? resp.expires_in * 1000 : 55 * 60 * 1000) - 60000,
-        };
-        resolve(resp.access_token);
-      };
-      tokenClient.requestAccessToken({ prompt: '' });
-    });
-  }
-
-  async function getAccessToken() {
-    const cache = window.RecallDriveTokenCache;
-    if (cache && cache.token && cache.expiresAt > Date.now()) {
-      return cache.token;
-    }
-    await ensureGisReady();
-    return requestTokenSilently();
-  }
-
   async function driveFetch(url, options = {}) {
-    const token = await getAccessToken();
+    const token = await RecallAuth.getAccessToken();
     const res = await fetch(url, {
       ...options,
       headers: { ...(options.headers || {}), Authorization: `Bearer ${token}` },
@@ -200,7 +150,7 @@ const RecallSync = (function () {
     }
   }
 
-  return { markDirty, reconcileOnSignIn, pushIfDirty, onStatus, getAccessToken };
+  return { markDirty, reconcileOnSignIn, pushIfDirty, onStatus };
 })();
 
 window.RecallSync = RecallSync;

@@ -188,9 +188,6 @@
 <button class="fab" id="addDeckFab" aria-label="New deck">+</button>
 <div class="toast" id="toast"></div>
 
-<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
-<script src="js/firebase-init.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/db.js"></script>
 <script src="js/drive-sync.js"></script>
@@ -212,9 +209,13 @@
 
   function renderSignedOut() {
     authArea.innerHTML = `<button class="sign-in-btn" id="signInBtn">Sign in with Google</button>`;
-    document.getElementById('signInBtn').addEventListener('click', () => {
-      // signInWithRedirect navigates away immediately; no need to await here.
-      RecallAuth.signIn();
+    document.getElementById('signInBtn').addEventListener('click', async () => {
+      try {
+        await RecallAuth.signIn();
+      } catch (err) {
+        const code = err && err.error ? err.error : (err && err.message) || 'unknown error';
+        showToast(`Sign-in failed: ${code}`, 5000);
+      }
     });
   }
 
@@ -227,8 +228,8 @@
       </div>
       <button class="sign-out-btn" id="signOutBtn">Sign out</button>
     `;
-    document.getElementById('signOutBtn').addEventListener('click', async () => {
-      await RecallAuth.signOut();
+    document.getElementById('signOutBtn').addEventListener('click', () => {
+      RecallAuth.signOut();
     });
   }
 
@@ -246,16 +247,6 @@
       }
     } else {
       renderSignedOut();
-    }
-  });
-
-  // Surface any redirect sign-in failure directly on screen, since we can't
-  // see the tablet's console. This runs once, after Firebase has had a
-  // chance to process the return-from-Google redirect.
-  RecallAuth.redirectResultPromise.then(() => {
-    const err = RecallAuth.getRedirectError();
-    if (err) {
-      showToast(`Sign-in failed: ${err.code || ''} ${err.message || err}`, 6000);
     }
   });
 

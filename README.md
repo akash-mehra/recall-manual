@@ -29,24 +29,33 @@ js/study.js     study session logic
 js/canvas-draw.js     handwriting capture
 js/camera-capture.js  photo capture + compression
 js/backup.js    export/import + payload builder used by Drive sync
-js/firebase-init.js   Firebase config (fill in your own project values)
-js/auth.js      Google sign-in via Firebase, requests Drive scope
-js/drive-sync.js      Drive appDataFolder backup, silent token refresh, auto-sync
+js/auth.js      Google sign-in via Google Identity Services (GIS), requests Drive scope
+js/drive-sync.js      Drive appDataFolder backup, auto-sync
 manifest.json, sw.js  PWA install + offline caching
 ```
 
 ## Setting up Google sign-in + Drive sync
 
-1. Create a Firebase project, register a web app, copy the config into
-   `js/firebase-init.js` (replace the `REPLACE_ME` placeholders).
-2. Enable the Google sign-in provider in Firebase Authentication, and add
-   your GitHub Pages domain under Authorized domains.
-3. In the same Google Cloud project, enable the Google Drive API.
-4. Configure the OAuth consent screen (Testing mode is fine for personal use;
-   add yourself as a test user).
-5. Grab the auto-created "Web client" OAuth Client ID from Google Cloud
-   Console → Credentials, and paste it into `googleOAuthClientId` in
-   `js/firebase-init.js`.
+Sign-in uses Google Identity Services (GIS) directly rather than Firebase
+Auth. Firebase's popup/redirect sign-in depends on shuttling data between
+its authDomain (`*.firebaseapp.com`) and this app's origin via cross-site
+storage, which mobile browsers increasingly block by default — it fails
+silently (no error, sign-in just never completes) on some Android Chrome
+setups. GIS talks to Google directly as a first-party flow instead.
+
+1. In Google Cloud Console, create (or reuse) a project.
+2. APIs & Services → enable the **Google Drive API**.
+3. APIs & Services → **Google Auth Platform** → run the setup wizard:
+   choose **External** audience, fill in app name/support email, and under
+   **Audience** add your own Google account as a **test user** (keeps the
+   app out of Google's review queue since it's for personal use).
+4. APIs & Services → Credentials → **Create credentials → OAuth client ID**
+   → Application type: **Web application**. Add your GitHub Pages origin
+   (e.g. `https://akash-mehra.github.io`) under **Authorized JavaScript
+   origins**. No redirect URI is needed since GIS's token client doesn't
+   use one.
+5. Copy the generated Client ID and paste it into `OAUTH_CLIENT_ID` in
+   `js/auth.js`.
 
 Sync is whole-database, last-write-wins — not a merge. If you edit on two
 devices while both are offline before either syncs, whichever syncs last
@@ -55,8 +64,8 @@ knowing if you ever go multi-device simultaneously.
 
 ## Notes
 
-No backend beyond Firebase Auth + Drive. All flashcard data lives in the
-browser's IndexedDB on-device, optionally backed up to your own Google
-Drive (hidden app-data folder — Recall Manual is the only thing that can
-see it). Local export/import to a JSON file is also available without
-signing in at all.
+No backend beyond Google's own OAuth/Drive APIs. All flashcard data lives
+in the browser's IndexedDB on-device, optionally backed up to your own
+Google Drive (hidden app-data folder — Recall Manual is the only thing
+that can see it). Local export/import to a JSON file is also available
+without signing in at all.

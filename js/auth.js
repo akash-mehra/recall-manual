@@ -1,20 +1,32 @@
-/* auth.js — Google sign-in via Firebase, requesting the Drive appdata scope
-   up front so the first sign-in also grants Drive access. Exposes a small
-   pub/sub so other scripts (drive-sync.js, page UI) can react to auth state.
+/* auth.js — Google sign-in via Google Identity Services (GIS) directly,
+   NOT Firebase Auth.
 
-   Uses signInWithRedirect rather than signInWithPopup: popups depend on a
-   cookie-based handshake between the popup and opener window that mobile
-   browsers increasingly block by default, which surfaces as a generic
-   "requested action is invalid" error inside the popup. Redirect avoids
-   that entirely by navigating the whole page instead.
+   Why: Firebase's popup/redirect sign-in shuttles data between the
+   authDomain (recall-manual.firebaseapp.com) and this app's origin
+   (akash-mehra.github.io) via cross-site storage. Android Chrome
+   increasingly blocks that by default, which fails SILENTLY — no error,
+   sign-in just never completes. GIS's token client talks directly to
+   Google as a first-party flow and is built to keep working as
+   third-party cookies go away, so it sidesteps the problem entirely.
+
+   One token, both identity and Drive access: we request 'openid email
+   profile' (identity) plus the Drive appdata scope together, so a single
+   consent grants everything drive-sync.js needs too.
 */
 
+const OAUTH_CLIENT_ID = '224241277021-68q1e47lgoekkrck5aa5bm8vvct146q4.apps.googleusercontent.com';
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata';
+const OAUTH_SCOPES = `openid email profile ${DRIVE_SCOPE}`;
+
+const TOKEN_CACHE_KEY = 'recall_manual_google_token_v1';
+const USER_CACHE_KEY = 'recall_manual_google_user_v1';
 
 const RecallAuth = (function () {
   let currentUser = null;
+  let lastError = null;
   const listeners = [];
-  let redirectResultChecked = false;
+  let tokenClient = null;
+  let gisReadyPromise = null;
 
   function onAuthChange(fn) {
     listeners.push(fn);
@@ -26,61 +38,164 @@ const RecallAuth = (function () {
     listeners.forEach((fn) => fn(user));
   }
 
-  firebase.auth().onAuthStateChanged((user) => {
-    notify(user);
-  });
-
-  // Capture the result of a redirect-based sign-in (runs once on page load).
-  let redirectError = null;
-  const redirectResultPromise = firebase.auth().getRedirectResult()
-    .then((result) => {
-      redirectResultChecked = true;
-      if (result && result.credential) {
-        const credential = firebase.auth.GoogleAuthProvider.credentialFromResult(result);
-        if (credential && credential.accessToken) {
-          window.RecallDriveTokenCache = {
-            token: credential.accessToken,
-            expiresAt: Date.now() + 55 * 60 * 1000,
-          };
-        }
+  function loadGisScript() {
+    return new Promise((resolve, reject) => {
+      if (window.google && window.google.accounts && window.google.accounts.oauth2) {
+        return resolve();
       }
-      return result;
-    })
-    .catch((err) => {
-      redirectResultChecked = true;
-      redirectError = err;
-      console.error('Redirect sign-in error', err);
-      return null;
+      const script = document.createElement('script');
+      script.src = 'https://accounts.google.com/gsi/client';
+      script.onload = resolve;
+      script.onerror = reject;
+      document.head.appendChild(script);
     });
-
-  function signIn() {
-    const provider = new firebase.auth.GoogleAuthProvider();
-    provider.addScope(DRIVE_SCOPE);
-    provider.setCustomParameters({ prompt: 'consent' });
-    return firebase.auth().signInWithRedirect(provider);
   }
 
-  async function signOutUser() {
-    await firebase.auth().signOut();
+  async function ensureTokenClient() {
+    if (tokenClient) return tokenClient;
+    if (!gisReadyPromise) gisReadyPromise = loadGisScript();
+    await gisReadyPromise;
+    tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: OAUTH_CLIENT_ID,
+      scope: OAUTH_SCOPES,
+      callback: () => {}, // overridden per-request below
+    });
+    return tokenClient;
+  }
+
+  function saveToken(resp) {
+    const record = {
+      token: resp.access_token,
+      expiresAt: Date.now() + (resp.expires_in ? resp.expires_in * 1000 : 55 * 60 * 1000) - 60000,
+    };
+    localStorage.setItem(TOKEN_CACHE_KEY, JSON.stringify(record));
+    window.RecallDriveTokenCache = record; // drive-sync.js reads this directly
+    return record;
+  }
+
+  function readCachedToken() {
+    try {
+      const raw = localStorage.getItem(TOKEN_CACHE_KEY);
+      if (!raw) return null;
+      const record = JSON.parse(raw);
+      window.RecallDriveTokenCache = record;
+      return record;
+    } catch {
+      return null;
+    }
+  }
+
+  async function fetchUserInfo(accessToken) {
+    const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) throw new Error('Failed to fetch profile info');
+    const data = await res.json();
+    return {
+      uid: data.sub,
+      displayName: data.name || data.email,
+      email: data.email,
+      photoURL: data.picture || '',
+    };
+  }
+
+  function requestToken({ silent }) {
+    return new Promise(async (resolve, reject) => {
+      const client = await ensureTokenClient();
+      client.callback = (resp) => {
+        if (resp.error) return reject(resp);
+        resolve(resp);
+      };
+      client.requestAccessToken({ prompt: silent ? '' : 'consent' });
+    });
+  }
+
+  /* On page load: try to restore a session without prompting, using either
+     a still-valid cached token or a silent (no-popup) refresh. */
+  async function restoreSession() {
+    const cached = readCachedToken();
+    if (cached && cached.expiresAt > Date.now()) {
+      const cachedUser = JSON.parse(localStorage.getItem(USER_CACHE_KEY) || 'null');
+      if (cachedUser) {
+        notify(cachedUser);
+        return;
+      }
+    }
+    // Try a silent refresh in case the user has a live Google session and
+    // previously granted consent — no popup shown if this fails.
+    try {
+      const resp = await requestToken({ silent: true });
+      const record = saveToken(resp);
+      const user = await fetchUserInfo(record.token);
+      localStorage.setItem(USER_CACHE_KEY, JSON.stringify(user));
+      notify(user);
+    } catch {
+      notify(null);
+    }
+  }
+
+  async function signIn() {
+    lastError = null;
+    try {
+      const resp = await requestToken({ silent: false });
+      const record = saveToken(resp);
+      const user = await fetchUserInfo(record.token);
+      localStorage.setItem(USER_CACHE_KEY, JSON.stringify(user));
+      notify(user);
+      return user;
+    } catch (err) {
+      lastError = err;
+      notify(null);
+      throw err;
+    }
+  }
+
+  function signOut() {
+    const cached = readCachedToken();
+    if (cached && cached.token && window.google && google.accounts && google.accounts.oauth2) {
+      google.accounts.oauth2.revoke(cached.token, () => {});
+    }
+    localStorage.removeItem(TOKEN_CACHE_KEY);
+    localStorage.removeItem(USER_CACHE_KEY);
     window.RecallDriveTokenCache = null;
+    notify(null);
+  }
+
+  /* Used by drive-sync.js — returns a valid access token, refreshing
+     silently first if the cached one is stale. */
+  async function getAccessToken() {
+    const cached = readCachedToken();
+    if (cached && cached.token && cached.expiresAt > Date.now()) {
+      return cached.token;
+    }
+    const resp = await requestToken({ silent: true });
+    const record = saveToken(resp);
+    return record.token;
   }
 
   function getCurrentUser() {
     return currentUser;
   }
 
-  function getRedirectError() {
-    return redirectError;
+  function getLastError() {
+    return lastError;
   }
+
+  restoreSession();
+  // Preload the GIS script + token client eagerly so that by the time the
+  // user taps "Sign in", requestAccessToken() fires synchronously within
+  // the click handler — mobile browsers are more likely to block the
+  // consent popup if there's an async gap (script loading) in between.
+  ensureTokenClient().catch(() => {});
 
   return {
     signIn,
-    signOut: signOutUser,
+    signOut,
     onAuthChange,
     getCurrentUser,
+    getAccessToken,
+    getLastError,
     DRIVE_SCOPE,
-    redirectResultPromise,
-    getRedirectError,
   };
 })();
 
