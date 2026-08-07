@@ -3,12 +3,13 @@
    available offline.
 */
 
-const CACHE_NAME = 'recall-manual-v4';
+const CACHE_NAME = 'recall-manual-v5';
 const ASSETS = [
   'index.html',
   'study.html',
   'create.html',
   'settings.html',
+  'library.html',
   'manifest.json',
   'css/theme.css',
   'js/db.js',

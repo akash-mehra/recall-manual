@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Photo Library — Recall Manual</title>
+<link rel="stylesheet" href="css/theme.css" />
+<style>
+  .back-link { font-size: 0.85rem; color: var(--ink-soft); }
+
+  .photo-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin-top: 16px;
+  }
+
+  .photo-tile {
+    aspect-ratio: 1 / 1;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    position: relative;
+    cursor: pointer;
+    border: 1px solid var(--glass-border);
+    background: var(--glass-fill);
+    box-shadow: var(--shadow-soft);
+  }
+  .photo-tile img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .photo-tile .tile-label {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    padding: 8px 10px 6px;
+    font-size: 0.7rem;
+    color: white;
+    background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.55) 100%);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--ink-soft);
+  }
+  .empty-state h2 { font-family: var(--font-display); color: var(--ink); margin-bottom: 8px; }
+
+  /* Lightbox */
+  .lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    background: rgba(40, 20, 30, 0.72);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .lightbox.open { display: flex; }
+  .lightbox-card {
+    max-width: 480px;
+    width: 100%;
+    padding: 20px;
+  }
+  .lightbox-img-wrap {
+    perspective: 1200px;
+  }
+  .lightbox-img {
+    width: 100%;
+    max-height: 60vh;
+    object-fit: contain;
+    border-radius: var(--radius-sm);
+    background: white;
+    display: block;
+  }
+  .lightbox-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 14px;
+  }
+  .lightbox-meta .deck-name { font-size: 0.85rem; color: var(--ink-soft); }
+  .lightbox-actions { display: flex; gap: 10px; margin-top: 14px; }
+  .lightbox-actions button, .lightbox-actions a {
+    flex: 1;
+    text-align: center;
+    font-size: 0.82rem;
+  }
+  .flip-side-toggle {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+    justify-content: center;
+  }
+  .flip-side-toggle button {
+    font-size: 0.75rem;
+    padding: 6px 14px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--glass-border);
+    background: rgba(255,255,255,0.5);
+    cursor: pointer;
+  }
+  .flip-side-toggle button.active {
+    background: var(--blossom);
+    color: white;
+    border-color: transparent;
+  }
+  .close-btn {
+    position: absolute;
+    top: 14px; right: 18px;
+    font-size: 1.4rem;
+    color: white;
+    background: none;
+    border: none;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+<canvas id="sakura-canvas"></canvas>
+
+<div class="app-shell">
+  <div class="topbar">
+    <div>
+      <a class="back-link" href="index.html">&larr; Decks</a>
+      <h1 style="margin-top:4px">Photo Library</h1>
+    </div>
+  </div>
+
+  <div class="container">
+    <div id="photoGrid" class="photo-grid"></div>
+    <div id="emptyState" class="empty-state" style="display:none">
+      <h2>No photo cards yet</h2>
+      <p>Cards you create using the Photo mode will show up here.</p>
+    </div>
+  </div>
+</div>
+
+<div class="lightbox" id="lightbox">
+  <button class="close-btn" id="closeLightbox" aria-label="Close">✕</button>
+  <div class="glass lightbox-card">
+    <div class="lightbox-img-wrap">
+      <img class="lightbox-img" id="lightboxImg" alt="Flashcard photo" />
+    </div>
+    <div class="flip-side-toggle" id="flipSideToggle" style="display:none">
+      <button data-side="front" class="active">Front</button>
+      <button data-side="back">Back</button>
+    </div>
+    <div class="lightbox-meta">
+      <span class="deck-name" id="lightboxDeckName"></span>
+    </div>
+    <div class="lightbox-actions">
+      <a class="btn btn-primary" id="studyDeckLink" href="#">Study this deck</a>
+    </div>
+  </div>
+</div>
+
+<script src="js/auth.js"></script>
+<script src="js/db.js"></script>
+<script src="js/drive-sync.js"></script>
+<script src="js/sakura.js"></script>
+<script>
+  initSakura();
+
+  const photoGrid = document.getElementById('photoGrid');
+  const emptyState = document.getElementById('emptyState');
+  const lightbox = document.getElementById('lightbox');
+  const lightboxImg = document.getElementById('lightboxImg');
+  const lightboxDeckName = document.getElementById('lightboxDeckName');
+  const studyDeckLink = document.getElementById('studyDeckLink');
+  const flipSideToggle = document.getElementById('flipSideToggle');
+
+  let currentTile = null;
+
+  async function loadPhotoCards() {
+    const decks = await RecallDB.Decks.all();
+    const tiles = [];
+
+    for (const deck of decks) {
+      const cards = await RecallDB.Cards.byDeck(deck.id);
+      for (const card of cards) {
+        if (card.type !== 'photo') continue;
+        const frontBlob = card.front && card.front.imageBlob;
+        const backBlob = card.back && card.back.imageBlob;
+        if (!frontBlob && !backBlob) continue;
+        tiles.push({
+          deckId: deck.id,
+          deckName: deck.name,
+          frontUrl: frontBlob ? URL.createObjectURL(frontBlob) : null,
+          backUrl: backBlob ? URL.createObjectURL(backBlob) : null,
+        });
+      }
+    }
+    return tiles;
+  }
+
+  function renderGrid(tiles) {
+    photoGrid.innerHTML = '';
+    emptyState.style.display = tiles.length ? 'none' : 'block';
+
+    tiles.forEach((tile) => {
+      const thumbUrl = tile.frontUrl || tile.backUrl;
+      const el = document.createElement('div');
+      el.className = 'photo-tile';
+      el.innerHTML = `
+        <img src="${thumbUrl}" alt="" />
+        <div class="tile-label">${escapeHtml(tile.deckName)}</div>
+      `;
+      el.addEventListener('click', () => openLightbox(tile));
+      photoGrid.appendChild(el);
+    });
+  }
+
+  function openLightbox(tile) {
+    currentTile = tile;
+    const hasBoth = tile.frontUrl && tile.backUrl;
+    flipSideToggle.style.display = hasBoth ? 'flex' : 'none';
+    flipSideToggle.querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.side === 'front'));
+    lightboxImg.src = tile.frontUrl || tile.backUrl;
+    lightboxDeckName.textContent = tile.deckName;
+    studyDeckLink.href = `study.html?deck=${tile.deckId}`;
+    lightbox.classList.add('open');
+  }
+
+  flipSideToggle.querySelectorAll('button').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if (!currentTile) return;
+      flipSideToggle.querySelectorAll('button').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      lightboxImg.src = btn.dataset.side === 'front'
+        ? (currentTile.frontUrl || currentTile.backUrl)
+        : (currentTile.backUrl || currentTile.frontUrl);
+    });
+  });
+
+  document.getElementById('closeLightbox').addEventListener('click', () => {
+    lightbox.classList.remove('open');
+  });
+  lightbox.addEventListener('click', (e) => {
+    if (e.target === lightbox) lightbox.classList.remove('open');
+  });
+
+  function escapeHtml(str) {
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+  }
+
+  loadPhotoCards().then(renderGrid);
+</script>
+</body>
+</html>

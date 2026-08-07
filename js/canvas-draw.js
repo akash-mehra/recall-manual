@@ -1,5 +1,11 @@
 /* canvas-draw.js — pointer-based drawing surface for handwritten flashcards.
-   Works with finger, mouse, or stylus (pressure-aware where the device exposes it).
+   Works with finger, mouse, or stylus (pressure-aware via the Pointer
+   Events API, which covers all three input types uniformly).
+
+   Uses ONLY pointer events, not touch events too — registering both causes
+   each stroke to fire twice on Android Chrome (which emits native pointer
+   events for touch/stylus input independently of touch events), leading to
+   stuttery, doubled-up lines.
 */
 
 function createDrawPad(canvas) {
@@ -11,10 +17,9 @@ function createDrawPad(canvas) {
   function resizeToDisplaySize() {
     const rect = canvas.getBoundingClientRect();
     const ratio = window.devicePixelRatio || 1;
-    const prevData = canvas.toDataURL();
     canvas.width = rect.width * ratio;
     canvas.height = rect.height * ratio;
-    ctx.scale(ratio, ratio);
+    ctx.scale(ratio, ratio); // scale is applied ONCE, here, and nowhere else
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.strokeStyle = '#5b3b4c';
@@ -22,21 +27,21 @@ function createDrawPad(canvas) {
   }
 
   function fillWhite() {
+    // Fill in device-pixel space (identity transform), then restore back to
+    // whatever scale was already active — restore() alone puts that scale
+    // back correctly, so we must NOT re-apply ctx.scale() again afterward.
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.restore();
-    const ratio = window.devicePixelRatio || 1;
-    ctx.scale(ratio, ratio);
   }
 
   resizeToDisplaySize();
 
   function pos(e) {
     const rect = canvas.getBoundingClientRect();
-    const point = e.touches ? e.touches[0] : e;
-    return { x: point.clientX - rect.left, y: point.clientY - rect.top };
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
   }
 
   function lineWidthFor(e) {
@@ -46,6 +51,7 @@ function createDrawPad(canvas) {
 
   function start(e) {
     e.preventDefault();
+    canvas.setPointerCapture && canvas.setPointerCapture(e.pointerId);
     drawing = true;
     hasContent = true;
     last = pos(e);
@@ -70,10 +76,9 @@ function createDrawPad(canvas) {
 
   canvas.addEventListener('pointerdown', start);
   canvas.addEventListener('pointermove', move);
-  window.addEventListener('pointerup', end);
-  canvas.addEventListener('touchstart', start, { passive: false });
-  canvas.addEventListener('touchmove', move, { passive: false });
-  canvas.addEventListener('touchend', end);
+  canvas.addEventListener('pointerup', end);
+  canvas.addEventListener('pointercancel', end);
+  canvas.style.touchAction = 'none'; // let pointer events handle everything, no browser pan/zoom
 
   return {
     clear() {
