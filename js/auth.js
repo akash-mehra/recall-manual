@@ -110,26 +110,22 @@ const RecallAuth = (function () {
     });
   }
 
-  /* On page load: try to restore a session without prompting, using either
-     a still-valid cached token or a silent (no-popup) refresh. */
-  async function restoreSession() {
-    const cached = readCachedToken();
-    if (cached && cached.expiresAt > Date.now()) {
-      const cachedUser = JSON.parse(localStorage.getItem(USER_CACHE_KEY) || 'null');
-      if (cachedUser) {
-        notify(cachedUser);
-        return;
-      }
-    }
-    // Try a silent refresh in case the user has a live Google session and
-    // previously granted consent — no popup shown if this fails.
-    try {
-      const resp = await requestToken({ silent: true });
-      const record = saveToken(resp);
-      const user = await fetchUserInfo(record.token);
-      localStorage.setItem(USER_CACHE_KEY, JSON.stringify(user));
-      notify(user);
-    } catch {
+  /* On page load: only restore from a locally cached session — never make
+     an unsolicited GIS request here. Even a "silent" request can surface
+     as a blocked-popup warning to the user if there's no click behind it,
+     which is confusing on a page they haven't interacted with yet. The
+     gate should show static sign-in options and stay quiet until tapped.
+  */
+  function restoreSession() {
+    const cachedUser = JSON.parse(localStorage.getItem(USER_CACHE_KEY) || 'null');
+    const cachedToken = readCachedToken();
+    if (cachedUser) {
+      // Show as signed in even if the token itself has expired — a fresh
+      // token will be fetched lazily (still user-gesture-adjacent, e.g.
+      // triggered by an in-app action) the next time getAccessToken() is
+      // actually needed, rather than eagerly on page load.
+      notify(cachedUser);
+    } else {
       notify(null);
     }
   }
