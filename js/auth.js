@@ -22,7 +22,12 @@ const TOKEN_CACHE_KEY = 'recall_manual_google_token_v1';
 const USER_CACHE_KEY = 'recall_manual_google_user_v1';
 
 const RecallAuth = (function () {
-  let currentUser = null;
+  // undefined = "not checked yet", null = "checked, signed out", object = signed in.
+  // Using undefined as the sentinel (rather than null) lets a listener that
+  // registers AFTER restoreSession() has already run still get replayed the
+  // signed-out state — otherwise the page never hears about it and just
+  // sits blank, which is exactly the bug this fixes.
+  let currentUser = undefined;
   let lastError = null;
   const listeners = [];
   let tokenClient = null;
@@ -30,7 +35,7 @@ const RecallAuth = (function () {
 
   function onAuthChange(fn) {
     listeners.push(fn);
-    if (currentUser !== null) fn(currentUser);
+    if (currentUser !== undefined) fn(currentUser);
   }
 
   function notify(user) {
