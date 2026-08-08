@@ -5,6 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Photo Library — Recall Manual</title>
 <link rel="stylesheet" href="css/theme.css" />
+<script>
+  (function () {
+    try {
+      if ((localStorage.getItem('recall_manual_theme') || 'light') === 'dark') {
+        document.documentElement.classList.add('theme-dark');
+      }
+    } catch (e) {}
+  })();
+</script>
 <style>
   .back-link { font-size: 0.85rem; color: var(--ink-soft); }
 
@@ -163,9 +172,11 @@
 <script src="js/auth.js"></script>
 <script src="js/db.js"></script>
 <script src="js/drive-sync.js"></script>
+<script src="js/theme.js"></script>
 <script src="js/sakura.js"></script>
+<script src="js/stars.js"></script>
 <script>
-  initSakura();
+  if (RecallTheme.getTheme() === 'dark') { initStars(); } else { initSakura(); }
 
   const photoGrid = document.getElementById('photoGrid');
   const emptyState = document.getElementById('emptyState');

@@ -122,6 +122,20 @@ const RecallSync = (function () {
     // hourly/daily/manual: periodic timer or explicit "Backup now" handles it
   }
 
+  /* Cancels any pending debounced push and does it NOW instead, awaited.
+     Critical for navigation: a setTimeout scheduled by markDirty() is
+     destroyed the instant the page navigates away (e.g. "Save & finish"
+     jumping straight to study.html), so a card saved seconds before
+     leaving the page could silently never make it to Drive — no error,
+     it just never ran. Call this before any deliberate same-app
+     navigation that follows a mutation. */
+  async function flushPendingSync() {
+    clearTimeout(debounceTimer);
+    if (!RecallAuth.getCurrentUser()) return;
+    if (getSyncMode() !== 'auto') return; // hourly/daily/manual don't auto-push on navigation
+    await pushIfDirty();
+  }
+
   async function pushIfDirty() {
     const lastChange = Number(localStorage.getItem(LAST_LOCAL_CHANGE_KEY) || 0);
     const lastSynced = Number(localStorage.getItem(LAST_SYNCED_AT_KEY) || 0);
@@ -222,6 +236,7 @@ const RecallSync = (function () {
     markDirty,
     reconcileOnSignIn,
     pushIfDirty,
+    flushPendingSync,
     backupNow,
     onStatus,
     getSyncMode,

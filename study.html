@@ -5,6 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Study — Recall Manual</title>
 <link rel="stylesheet" href="css/theme.css" />
+<script>
+  (function () {
+    try {
+      if ((localStorage.getItem('recall_manual_theme') || 'light') === 'dark') {
+        document.documentElement.classList.add('theme-dark');
+      }
+    } catch (e) {}
+  })();
+</script>
 <style>
   .back-link { font-size: 0.85rem; color: var(--ink-soft); }
   .header-row { display: flex; align-items: center; justify-content: space-between; }
@@ -141,7 +150,7 @@
 <div class="app-shell">
   <div class="topbar">
     <div>
-      <a class="back-link" href="index.html">&larr; Decks</a>
+      <a class="back-link" href="index.html" id="backToDecksLink">&larr; Decks</a>
       <h1 id="deckName" style="margin-top:4px">Study</h1>
     </div>
     <label class="hide-struck-label">
@@ -187,7 +196,7 @@
       <p>Nice work. You can go through the deck again or head back to your decks.</p>
       <div class="nav-row" style="max-width:320px; margin:20px auto 0">
         <button class="btn btn-ghost" id="restartBtn">Restart</button>
-        <a class="btn btn-primary" href="index.html" style="text-align:center">Decks</a>
+        <a class="btn btn-primary" href="index.html" id="completeDecksLink" style="text-align:center">Decks</a>
       </div>
     </div>
   </div>
@@ -196,8 +205,20 @@
 <script src="js/auth.js"></script>
 <script src="js/db.js"></script>
 <script src="js/drive-sync.js"></script>
+<script src="js/nav.js"></script>
+<script src="js/theme.js"></script>
 <script src="js/sakura.js"></script>
+<script src="js/stars.js"></script>
 <script src="js/study.js"></script>
-<script>initSakura();</script>
+<script>
+  if (RecallTheme.getTheme() === 'dark') { initStars(); } else { initSakura(); }
+  ['backToDecksLink', 'completeDecksLink'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('click', (e) => {
+      e.preventDefault();
+      RecallNav.goTo(el.getAttribute('href'));
+    });
+  });
+</script>
 </body>
 </html>

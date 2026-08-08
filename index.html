@@ -7,6 +7,15 @@
 <link rel="manifest" href="manifest.json" />
 <meta name="theme-color" content="#f7a8c4" />
 <link rel="stylesheet" href="css/theme.css" />
+<script>
+  (function () {
+    try {
+      if ((localStorage.getItem('recall_manual_theme') || 'light') === 'dark') {
+        document.documentElement.classList.add('theme-dark');
+      }
+    } catch (e) {}
+  })();
+</script>
 <style>
   .deck-grid {
     display: grid;
@@ -267,10 +276,13 @@
 <script src="js/auth.js"></script>
 <script src="js/db.js"></script>
 <script src="js/drive-sync.js"></script>
+<script src="js/nav.js"></script>
+<script src="js/theme.js"></script>
 <script src="js/sakura.js"></script>
+<script src="js/stars.js"></script>
 <script src="js/backup.js"></script>
 <script>
-  initSakura();
+  if (RecallTheme.getTheme() === 'dark') { initStars(); } else { initSakura(); }
 
   function showToast(msg, duration = 1800) {
     const t = document.getElementById('toast');
@@ -422,11 +434,11 @@
       `;
       el.querySelector('.add-btn').addEventListener('click', (e) => {
         e.stopPropagation();
-        window.location.href = `create.html?deck=${deck.id}`;
+        RecallNav.goTo(`create.html?deck=${deck.id}`);
       });
       el.querySelector('.study-btn').addEventListener('click', (e) => {
         e.stopPropagation();
-        window.location.href = `study.html?deck=${deck.id}`;
+        RecallNav.goTo(`study.html?deck=${deck.id}`);
       });
       deckGrid.appendChild(el);
     }
