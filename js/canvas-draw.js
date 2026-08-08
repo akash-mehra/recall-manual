@@ -36,6 +36,7 @@ function createDrawPad(canvas) {
 
   let currentColor = PENCIL_COLORS.black;
   let isHighlighter = false;
+  let isEraser = false;
 
   function fillWhite() {
     ctx.save();
@@ -69,6 +70,7 @@ function createDrawPad(canvas) {
   }
 
   function lineWidthFor(e) {
+    if (isEraser) return 22;
     if (isHighlighter) return 14;
     if (e.pressure && e.pressure > 0) return 1.5 + e.pressure * 3.5;
     return 2.5;
@@ -87,8 +89,8 @@ function createDrawPad(canvas) {
     if (!drawing) return;
     e.preventDefault();
     const p = pos(e);
-    ctx.globalAlpha = isHighlighter ? 0.45 : 1;
-    ctx.strokeStyle = currentColor;
+    ctx.globalAlpha = isEraser ? 1 : (isHighlighter ? 0.28 : 1);
+    ctx.strokeStyle = isEraser ? '#ffffff' : currentColor;
     ctx.lineWidth = lineWidthFor(e);
     ctx.beginPath();
     ctx.moveTo(last.x, last.y);
@@ -114,6 +116,11 @@ function createDrawPad(canvas) {
     setTool(color, highlighter = false) {
       currentColor = color;
       isHighlighter = highlighter;
+      isEraser = false;
+    },
+    setEraser() {
+      isEraser = true;
+      isHighlighter = false;
     },
     clear() {
       if (sized) fillWhite();

@@ -104,6 +104,12 @@
   }
   .swatch.selected { box-shadow: 0 0 0 2px var(--ink); }
   .swatch.highlighter { border-radius: 6px; width: 30px; height: 20px; }
+  .swatch.eraser-swatch {
+    background: #f4f0ee;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--ink-soft);
+  }
+  .swatch.eraser-swatch svg { width: 15px; height: 15px; }
 
   .photo-drop {
     border: 2px dashed var(--glass-border);
@@ -179,6 +185,12 @@
               <button class="swatch selected" data-color="black" data-highlighter="false" style="background:#242021" aria-label="Black pencil"></button>
               <button class="swatch" data-color="red" data-highlighter="false" style="background:#c23b3b" aria-label="Red pencil"></button>
               <button class="swatch" data-color="blue" data-highlighter="false" style="background:#2e5fa3" aria-label="Blue pencil"></button>
+              <button class="swatch eraser-swatch" data-eraser="true" aria-label="Eraser">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M20 20H9l-6-6a2 2 0 0 1 0-2.8l9-9a2 2 0 0 1 2.8 0l6 6a2 2 0 0 1 0 2.8L13 20"></path>
+                  <path d="M6 14l6 6"></path>
+                </svg>
+              </button>
             </div>
             <div class="brush-group">
               <span class="brush-label">Highlighter</span>
@@ -288,11 +300,18 @@
   });
 
   // Brush color/tool selection — applies to both pads so front/back share
-  // the same active pencil or highlighter.
+  // the same active pencil, highlighter, or eraser.
   document.querySelectorAll('.swatch').forEach((btn) => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.swatch').forEach((b) => b.classList.remove('selected'));
       btn.classList.add('selected');
+
+      if (btn.dataset.eraser === 'true') {
+        drawPadFront.setEraser();
+        drawPadBack.setEraser();
+        return;
+      }
+
       const isHighlighter = btn.dataset.highlighter === 'true';
       const palette = isHighlighter ? HIGHLIGHTER_COLORS : PENCIL_COLORS;
       const hex = palette[btn.dataset.color];
