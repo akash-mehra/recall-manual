@@ -6,30 +6,38 @@
    each stroke to fire twice on Android Chrome (which emits native pointer
    events for touch/stylus input independently of touch events), leading to
    stuttery, doubled-up lines.
+
+   Sizing is LAZY: createDrawPad() may be called while the canvas's parent
+   panel is still display:none (e.g. the "Draw" tab isn't selected yet).
+   getBoundingClientRect() returns 0x0 for anything hidden that way, so
+   sizing eagerly at construction time silently produces a 0x0 drawing
+   buffer — the canvas LOOKS the right size on screen (CSS still stretches
+   it) but there's nothing to actually draw into. ensureSized() is called
+   every time the panel/side becomes visible instead, and only does real
+   work the first time (or if the box was previously 0x0).
 */
+
+const PENCIL_COLORS = {
+  black: '#242021',
+  red: '#c23b3b',
+  blue: '#2e5fa3',
+};
+const HIGHLIGHTER_COLORS = {
+  yellow: '#f5d90a',
+  red: '#ff5c7a',
+};
 
 function createDrawPad(canvas) {
   const ctx = canvas.getContext('2d');
   let drawing = false;
   let last = null;
   let hasContent = false;
+  let sized = false;
 
-  function resizeToDisplaySize() {
-    const rect = canvas.getBoundingClientRect();
-    const ratio = window.devicePixelRatio || 1;
-    canvas.width = rect.width * ratio;
-    canvas.height = rect.height * ratio;
-    ctx.scale(ratio, ratio); // scale is applied ONCE, here, and nowhere else
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.strokeStyle = '#5b3b4c';
-    fillWhite();
-  }
+  let currentColor = PENCIL_COLORS.black;
+  let isHighlighter = false;
 
   function fillWhite() {
-    // Fill in device-pixel space (identity transform), then restore back to
-    // whatever scale was already active — restore() alone puts that scale
-    // back correctly, so we must NOT re-apply ctx.scale() again afterward.
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = '#ffffff';
@@ -37,7 +45,23 @@ function createDrawPad(canvas) {
     ctx.restore();
   }
 
-  resizeToDisplaySize();
+  function resizeToDisplaySize() {
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return false; // still hidden
+    const ratio = window.devicePixelRatio || 1;
+    canvas.width = rect.width * ratio;
+    canvas.height = rect.height * ratio;
+    ctx.scale(ratio, ratio); // scale applied ONCE, here, and nowhere else
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    fillWhite();
+    sized = true;
+    return true;
+  }
+
+  function ensureSized() {
+    if (!sized) resizeToDisplaySize();
+  }
 
   function pos(e) {
     const rect = canvas.getBoundingClientRect();
@@ -45,11 +69,13 @@ function createDrawPad(canvas) {
   }
 
   function lineWidthFor(e) {
+    if (isHighlighter) return 14;
     if (e.pressure && e.pressure > 0) return 1.5 + e.pressure * 3.5;
     return 2.5;
   }
 
   function start(e) {
+    if (!sized) resizeToDisplaySize(); // last-resort safety net
     e.preventDefault();
     canvas.setPointerCapture && canvas.setPointerCapture(e.pointerId);
     drawing = true;
@@ -61,11 +87,14 @@ function createDrawPad(canvas) {
     if (!drawing) return;
     e.preventDefault();
     const p = pos(e);
+    ctx.globalAlpha = isHighlighter ? 0.45 : 1;
+    ctx.strokeStyle = currentColor;
     ctx.lineWidth = lineWidthFor(e);
     ctx.beginPath();
     ctx.moveTo(last.x, last.y);
     ctx.lineTo(p.x, p.y);
     ctx.stroke();
+    ctx.globalAlpha = 1;
     last = p;
   }
 
@@ -81,8 +110,13 @@ function createDrawPad(canvas) {
   canvas.style.touchAction = 'none'; // let pointer events handle everything, no browser pan/zoom
 
   return {
+    ensureSized,
+    setTool(color, highlighter = false) {
+      currentColor = color;
+      isHighlighter = highlighter;
+    },
     clear() {
-      fillWhite();
+      if (sized) fillWhite();
       hasContent = false;
     },
     isEmpty() {
@@ -95,3 +129,5 @@ function createDrawPad(canvas) {
 }
 
 window.createDrawPad = createDrawPad;
+window.PENCIL_COLORS = PENCIL_COLORS;
+window.HIGHLIGHTER_COLORS = HIGHLIGHTER_COLORS;

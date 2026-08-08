@@ -81,8 +81,8 @@
     touch-action: none;
     background: white;
   }
-  .draw-tools { display: flex; justify-content: flex-end; margin-top: 8px; }
-  .draw-tools button {
+  .draw-tools { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; flex-wrap: wrap; gap: 10px; }
+  .draw-tools button.clear-btn {
     font-size: 0.78rem;
     padding: 6px 12px;
     border-radius: var(--radius-sm);
@@ -90,6 +90,20 @@
     background: rgba(255,255,255,0.6);
     cursor: pointer;
   }
+
+  .brush-toolbar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .brush-group { display: flex; align-items: center; gap: 6px; }
+  .brush-group .brush-label { font-size: 0.7rem; color: var(--ink-soft); margin-right: 2px; }
+  .swatch {
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.9);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+    cursor: pointer;
+    padding: 0;
+  }
+  .swatch.selected { box-shadow: 0 0 0 2px var(--ink); }
+  .swatch.highlighter { border-radius: 6px; width: 30px; height: 20px; }
 
   .photo-drop {
     border: 2px dashed var(--glass-border);
@@ -159,7 +173,20 @@
         <canvas class="draw-canvas" id="drawCanvasFront"></canvas>
         <canvas class="draw-canvas" id="drawCanvasBack" style="display:none"></canvas>
         <div class="draw-tools">
-          <button id="clearDrawBtn">Clear</button>
+          <div class="brush-toolbar">
+            <div class="brush-group">
+              <span class="brush-label">Pencil</span>
+              <button class="swatch selected" data-color="black" data-highlighter="false" style="background:#242021" aria-label="Black pencil"></button>
+              <button class="swatch" data-color="red" data-highlighter="false" style="background:#c23b3b" aria-label="Red pencil"></button>
+              <button class="swatch" data-color="blue" data-highlighter="false" style="background:#2e5fa3" aria-label="Blue pencil"></button>
+            </div>
+            <div class="brush-group">
+              <span class="brush-label">Highlighter</span>
+              <button class="swatch highlighter" data-color="yellow" data-highlighter="true" style="background:#f5d90a" aria-label="Yellow highlighter"></button>
+              <button class="swatch highlighter" data-color="red" data-highlighter="true" style="background:#ff5c7a" aria-label="Red highlighter"></button>
+            </div>
+          </div>
+          <button class="clear-btn" id="clearDrawBtn">Clear</button>
         </div>
       </div>
 
@@ -219,6 +246,10 @@
       document.querySelectorAll('.mode-panel').forEach((p) => {
         p.style.display = p.dataset.panel === currentMode ? 'block' : 'none';
       });
+      if (currentMode === 'draw') {
+        // Panel just became visible — size whichever canvas is currently shown.
+        (currentSide === 'front' ? drawPadFront : drawPadBack).ensureSized();
+      }
     });
   });
 
@@ -229,6 +260,9 @@
       btn.classList.add('active');
       currentSide = btn.dataset.side;
       updateSideVisibility();
+      if (currentMode === 'draw') {
+        (currentSide === 'front' ? drawPadFront : drawPadBack).ensureSized();
+      }
     });
   });
 
@@ -251,6 +285,20 @@
   const drawPadBack = createDrawPad(document.getElementById('drawCanvasBack'));
   document.getElementById('clearDrawBtn').addEventListener('click', () => {
     (currentSide === 'front' ? drawPadFront : drawPadBack).clear();
+  });
+
+  // Brush color/tool selection — applies to both pads so front/back share
+  // the same active pencil or highlighter.
+  document.querySelectorAll('.swatch').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.swatch').forEach((b) => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      const isHighlighter = btn.dataset.highlighter === 'true';
+      const palette = isHighlighter ? HIGHLIGHTER_COLORS : PENCIL_COLORS;
+      const hex = palette[btn.dataset.color];
+      drawPadFront.setTool(hex, isHighlighter);
+      drawPadBack.setTool(hex, isHighlighter);
+    });
   });
 
   // Photo capture

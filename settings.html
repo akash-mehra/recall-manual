@@ -85,6 +85,61 @@
     font-size: 0.85rem;
   }
 
+  .manage-deck { border-bottom: 1px solid var(--glass-border); padding: 12px 0; }
+  .manage-deck:last-child { border-bottom: none; }
+  .manage-deck-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    gap: 10px;
+  }
+  .manage-deck-info { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .manage-deck-info .chevron {
+    font-size: 0.7rem;
+    color: var(--ink-soft);
+    transition: transform 0.15s ease;
+    flex-shrink: 0;
+  }
+  .manage-deck-info .chevron.open { transform: rotate(90deg); }
+  .manage-deck-name { font-weight: 600; font-size: 0.88rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .manage-deck-count { font-size: 0.75rem; color: var(--ink-soft); flex-shrink: 0; }
+  .delete-deck-btn {
+    background: rgba(224,138,138,0.15);
+    color: var(--tag-red);
+    border: 1px solid rgba(224,138,138,0.3);
+    border-radius: var(--radius-sm);
+    padding: 6px 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .manage-card-list { margin-top: 10px; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
+  .manage-card-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: var(--radius-sm);
+    background: rgba(255,255,255,0.4);
+    font-size: 0.8rem;
+  }
+  .manage-card-preview { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-soft); flex: 1; min-width: 0; }
+  .manage-card-type { font-size: 0.68rem; color: var(--ink-soft); background: rgba(255,255,255,0.6); padding: 2px 6px; border-radius: 8px; flex-shrink: 0; }
+  .delete-card-btn {
+    background: none;
+    border: none;
+    color: var(--tag-red);
+    font-size: 1rem;
+    cursor: pointer;
+    line-height: 1;
+    padding: 2px 4px;
+    flex-shrink: 0;
+  }
+
   .toast {
     position: fixed;
     bottom: 24px;
@@ -182,6 +237,13 @@
     <div class="glass section">
       <h2>Storage on this device</h2>
       <div class="section-sub" id="storageNote">Calculating…</div>
+    </div>
+
+    <div class="glass section">
+      <h2>Manage decks &amp; cards</h2>
+      <div class="section-sub">Delete individual cards, or an entire deck and everything in it. This can't be undone.</div>
+      <div id="manageList"></div>
+      <div class="disabled-note" id="manageEmpty" style="display:none">No decks yet.</div>
     </div>
   </div>
 </div>
@@ -330,6 +392,110 @@
       document.getElementById('storageNote').textContent = 'Storage estimate not available on this browser';
     }
   });
+
+  /* ---- Manage decks & cards (delete) ---- */
+  const manageList = document.getElementById('manageList');
+  const manageEmpty = document.getElementById('manageEmpty');
+  const openDeckIds = new Set();
+
+  function cardPreviewText(card) {
+    if (card.type === 'text') {
+      return (card.front && card.front.text) || (card.back && card.back.text) || '(empty text card)';
+    }
+    if (card.type === 'draw') return 'Hand-drawn card';
+    if (card.type === 'photo') return 'Photo card';
+    return 'Card';
+  }
+
+  async function renderManageList() {
+    const decks = await RecallDB.Decks.all();
+    manageEmpty.style.display = decks.length ? 'none' : 'block';
+    manageList.innerHTML = '';
+
+    for (const deck of decks) {
+      const count = await RecallDB.Cards.count(deck.id);
+      const wrap = document.createElement('div');
+      wrap.className = 'manage-deck';
+
+      const isOpen = openDeckIds.has(deck.id);
+      wrap.innerHTML = `
+        <div class="manage-deck-row">
+          <div class="manage-deck-info">
+            <span class="chevron ${isOpen ? 'open' : ''}">▶</span>
+            <span class="manage-deck-name">${escapeHtml(deck.name)}</span>
+            <span class="manage-deck-count">(${count})</span>
+          </div>
+          <button class="delete-deck-btn" data-deck-id="${deck.id}">Delete deck</button>
+        </div>
+        <div class="manage-card-list" style="display:${isOpen ? 'flex' : 'none'}"></div>
+      `;
+
+      const row = wrap.querySelector('.manage-deck-row');
+      const cardListEl = wrap.querySelector('.manage-card-list');
+      const chevron = wrap.querySelector('.chevron');
+
+      row.querySelector('.manage-deck-info').addEventListener('click', async () => {
+        const nowOpen = !openDeckIds.has(deck.id);
+        if (nowOpen) {
+          openDeckIds.add(deck.id);
+          chevron.classList.add('open');
+          cardListEl.style.display = 'flex';
+          await renderCardList(deck.id, cardListEl);
+        } else {
+          openDeckIds.delete(deck.id);
+          chevron.classList.remove('open');
+          cardListEl.style.display = 'none';
+        }
+      });
+
+      wrap.querySelector('.delete-deck-btn').addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const ok = confirm(`Delete "${deck.name}" and all ${count} card(s) in it? This can't be undone.`);
+        if (!ok) return;
+        await RecallDB.Decks.remove(deck.id);
+        openDeckIds.delete(deck.id);
+        showToast('Deck deleted');
+        renderManageList();
+      });
+
+      manageList.appendChild(wrap);
+      if (isOpen) await renderCardList(deck.id, cardListEl);
+    }
+  }
+
+  async function renderCardList(deckId, container) {
+    const cards = await RecallDB.Cards.byDeck(deckId);
+    container.innerHTML = '';
+    if (!cards.length) {
+      container.innerHTML = `<div class="manage-card-preview">No cards in this deck.</div>`;
+      return;
+    }
+    cards.forEach((card) => {
+      const row = document.createElement('div');
+      row.className = 'manage-card-row';
+      row.innerHTML = `
+        <span class="manage-card-type">${card.type}</span>
+        <span class="manage-card-preview">${escapeHtml(cardPreviewText(card))}</span>
+        <button class="delete-card-btn" aria-label="Delete card">✕</button>
+      `;
+      row.querySelector('.delete-card-btn').addEventListener('click', async () => {
+        const ok = confirm('Delete this card?');
+        if (!ok) return;
+        await RecallDB.Cards.remove(card.id);
+        showToast('Card deleted');
+        renderManageList();
+      });
+      container.appendChild(row);
+    });
+  }
+
+  function escapeHtml(str) {
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+  }
+
+  renderManageList();
 </script>
 </body>
 </html>
