@@ -177,6 +177,16 @@
 
   let currentTile = null;
 
+  // A face counts as "photo" if it's explicitly tagged that way (new cards
+  // created after the per-side type update), or — for cards saved before
+  // that change — if it has an image and the old card-level type wasn't
+  // "draw" (hand-drawn cards also stored images, just not camera photos).
+  function faceIsPhoto(card, face) {
+    if (!face || !face.imageBlob) return false;
+    if (face.kind) return face.kind === 'photo';
+    return card.type !== 'draw';
+  }
+
   async function loadPhotoCards() {
     const decks = await RecallDB.Decks.all();
     const tiles = [];
@@ -184,15 +194,14 @@
     for (const deck of decks) {
       const cards = await RecallDB.Cards.byDeck(deck.id);
       for (const card of cards) {
-        if (card.type !== 'photo') continue;
-        const frontBlob = card.front && card.front.imageBlob;
-        const backBlob = card.back && card.back.imageBlob;
-        if (!frontBlob && !backBlob) continue;
+        const frontIsPhoto = faceIsPhoto(card, card.front);
+        const backIsPhoto = faceIsPhoto(card, card.back);
+        if (!frontIsPhoto && !backIsPhoto) continue;
         tiles.push({
           deckId: deck.id,
           deckName: deck.name,
-          frontUrl: frontBlob ? URL.createObjectURL(frontBlob) : null,
-          backUrl: backBlob ? URL.createObjectURL(backBlob) : null,
+          frontUrl: frontIsPhoto ? URL.createObjectURL(card.front.imageBlob) : null,
+          backUrl: backIsPhoto ? URL.createObjectURL(card.back.imageBlob) : null,
         });
       }
     }

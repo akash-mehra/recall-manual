@@ -20,6 +20,7 @@ async function base64ToBlob(dataUrl) {
 async function serializeFace(face) {
   if (!face) return {};
   const out = {};
+  if (face.kind) out.kind = face.kind;
   if (face.text) out.text = face.text;
   if (face.imageBlob) out.imageDataUrl = await blobToBase64(face.imageBlob);
   return out;
@@ -28,6 +29,7 @@ async function serializeFace(face) {
 async function deserializeFace(face) {
   if (!face) return {};
   const out = {};
+  if (face.kind) out.kind = face.kind;
   if (face.text) out.text = face.text;
   if (face.imageDataUrl) out.imageBlob = await base64ToBlob(face.imageDataUrl);
   return out;

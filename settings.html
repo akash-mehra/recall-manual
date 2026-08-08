@@ -398,13 +398,33 @@
   const manageEmpty = document.getElementById('manageEmpty');
   const openDeckIds = new Set();
 
+  // A face's kind falls back to the legacy card-level type for cards
+  // created before front/back had independent types.
+  function faceKind(card, face) {
+    if (!face) return null;
+    if (face.kind) return face.kind;
+    if (face.text) return 'text';
+    if (face.imageBlob) return card.type === 'draw' ? 'draw' : 'photo';
+    return null;
+  }
+
+  const KIND_LABELS = { text: 'Type', draw: 'Draw', photo: 'Photo' };
+
   function cardPreviewText(card) {
-    if (card.type === 'text') {
-      return (card.front && card.front.text) || (card.back && card.back.text) || '(empty text card)';
-    }
-    if (card.type === 'draw') return 'Hand-drawn card';
-    if (card.type === 'photo') return 'Photo card';
-    return 'Card';
+    const frontKind = faceKind(card, card.front);
+    const backKind = faceKind(card, card.back);
+    if (frontKind === 'text' && card.front.text) return card.front.text;
+    if (backKind === 'text' && card.back.text) return card.back.text;
+    const frontLabel = KIND_LABELS[frontKind] || '?';
+    const backLabel = KIND_LABELS[backKind] || '?';
+    return `${frontLabel} front / ${backLabel} back`;
+  }
+
+  function cardTypeLabel(card) {
+    const frontKind = faceKind(card, card.front);
+    const backKind = faceKind(card, card.back);
+    if (frontKind === backKind) return frontKind || 'card';
+    return `${frontKind || '?'}/${backKind || '?'}`;
   }
 
   async function renderManageList() {
@@ -474,7 +494,7 @@
       const row = document.createElement('div');
       row.className = 'manage-card-row';
       row.innerHTML = `
-        <span class="manage-card-type">${card.type}</span>
+        <span class="manage-card-type">${cardTypeLabel(card)}</span>
         <span class="manage-card-preview">${escapeHtml(cardPreviewText(card))}</span>
         <button class="delete-card-btn" aria-label="Delete card">✕</button>
       `;

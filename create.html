@@ -188,67 +188,69 @@
   <div class="container">
     <div class="deck-label" id="deckLabel">Loading deck…</div>
 
+    <div class="side-toggle">
+      <button data-side="front" class="active">Front <span class="filled-dot" id="frontDot" style="display:none"></span></button>
+      <button data-side="back">Back <span class="filled-dot" id="backDot" style="display:none"></span></button>
+    </div>
+
     <div class="mode-tabs">
       <button data-mode="text" class="active">Type</button>
       <button data-mode="draw">Draw</button>
       <button data-mode="photo">Photo</button>
     </div>
 
-    <div class="side-toggle">
-      <button data-side="front" class="active">Front <span class="filled-dot" id="frontDot" style="display:none"></span></button>
-      <button data-side="back">Back <span class="filled-dot" id="backDot" style="display:none"></span></button>
-    </div>
-
     <div class="glass editor-panel">
-      <!-- Text mode -->
+      <!-- Text -->
       <div class="mode-panel" data-panel="text">
         <textarea class="text-input" id="textInputFront" placeholder="Front side text…"></textarea>
         <textarea class="text-input" id="textInputBack" placeholder="Back side text…" style="display:none"></textarea>
       </div>
 
-      <!-- Draw mode -->
-      <div class="mode-panel" data-panel="draw" style="display:none">
-        <canvas class="draw-canvas" id="drawCanvasFront"></canvas>
+      <!-- Draw -->
+      <div class="mode-panel" data-panel="draw">
+        <canvas class="draw-canvas" id="drawCanvasFront" style="display:none"></canvas>
         <canvas class="draw-canvas" id="drawCanvasBack" style="display:none"></canvas>
-        <div class="draw-tools">
-          <div class="brush-toolbar">
-            <div class="brush-group">
-              <span class="brush-label">Pencil</span>
-              <button class="swatch selected" data-color="black" data-highlighter="false" style="background:#242021" aria-label="Black pencil"></button>
-              <button class="swatch" data-color="red" data-highlighter="false" style="background:#c23b3b" aria-label="Red pencil"></button>
-              <button class="swatch" data-color="blue" data-highlighter="false" style="background:#2e5fa3" aria-label="Blue pencil"></button>
-              <button class="swatch eraser-swatch" data-eraser="true" aria-label="Eraser">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M20 20H9l-6-6a2 2 0 0 1 0-2.8l9-9a2 2 0 0 1 2.8 0l6 6a2 2 0 0 1 0 2.8L13 20"></path>
-                  <path d="M6 14l6 6"></path>
-                </svg>
-              </button>
+        <div id="drawChrome" style="display:none">
+          <div class="draw-tools">
+            <div class="brush-toolbar">
+              <div class="brush-group">
+                <span class="brush-label">Pencil</span>
+                <button class="swatch selected" data-color="black" data-highlighter="false" style="background:#242021" aria-label="Black pencil"></button>
+                <button class="swatch" data-color="red" data-highlighter="false" style="background:#c23b3b" aria-label="Red pencil"></button>
+                <button class="swatch" data-color="blue" data-highlighter="false" style="background:#2e5fa3" aria-label="Blue pencil"></button>
+                <button class="swatch eraser-swatch" data-eraser="true" aria-label="Eraser">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M20 20H9l-6-6a2 2 0 0 1 0-2.8l9-9a2 2 0 0 1 2.8 0l6 6a2 2 0 0 1 0 2.8L13 20"></path>
+                    <path d="M6 14l6 6"></path>
+                  </svg>
+                </button>
+              </div>
+              <div class="brush-group">
+                <span class="brush-label">Highlighter</span>
+                <button class="swatch highlighter" data-color="yellow" data-highlighter="true" style="background:#f5d90a" aria-label="Yellow highlighter"></button>
+                <button class="swatch highlighter" data-color="red" data-highlighter="true" style="background:#ff5c7a" aria-label="Red highlighter"></button>
+              </div>
             </div>
-            <div class="brush-group">
-              <span class="brush-label">Highlighter</span>
-              <button class="swatch highlighter" data-color="yellow" data-highlighter="true" style="background:#f5d90a" aria-label="Yellow highlighter"></button>
-              <button class="swatch highlighter" data-color="red" data-highlighter="true" style="background:#ff5c7a" aria-label="Red highlighter"></button>
+            <button class="clear-btn" id="clearDrawBtn">Clear</button>
+          </div>
+          <div class="brush-sliders">
+            <div class="slider-group">
+              <label for="sizeSlider">Size</label>
+              <input type="range" id="sizeSlider" min="1" max="8" step="0.5" value="2.5" />
+              <span class="slider-value" id="sizeValue">2.5</span>
             </div>
-          </div>
-          <button class="clear-btn" id="clearDrawBtn">Clear</button>
-        </div>
-        <div class="brush-sliders">
-          <div class="slider-group">
-            <label for="sizeSlider">Size</label>
-            <input type="range" id="sizeSlider" min="1" max="8" step="0.5" value="2.5" />
-            <span class="slider-value" id="sizeValue">2.5</span>
-          </div>
-          <div class="slider-group" id="opacityGroup">
-            <label for="opacitySlider">Opacity</label>
-            <input type="range" id="opacitySlider" min="10" max="70" step="1" value="28" />
-            <span class="slider-value" id="opacityValue">28%</span>
+            <div class="slider-group" id="opacityGroup">
+              <label for="opacitySlider">Opacity</label>
+              <input type="range" id="opacitySlider" min="10" max="70" step="1" value="28" />
+              <span class="slider-value" id="opacityValue">28%</span>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- Photo mode -->
-      <div class="mode-panel" data-panel="photo" style="display:none">
-        <div id="photoAreaFront">
+      <!-- Photo -->
+      <div class="mode-panel" data-panel="photo">
+        <div id="photoAreaFront" style="display:none">
           <div class="photo-source-buttons" id="photoSourceFront">
             <button class="photo-source-btn" data-target="front" data-source="camera">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
@@ -268,7 +270,7 @@
         <input type="file" accept="image/*" capture="environment" id="photoInputFrontCamera" style="display:none" />
         <input type="file" accept="image/*" id="photoInputFrontGallery" style="display:none" />
 
-        <div id="photoAreaBack" style="display:none; margin-top:14px">
+        <div id="photoAreaBack" style="display:none">
           <div class="photo-source-buttons" id="photoSourceBack">
             <button class="photo-source-btn" data-target="back" data-source="camera">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
@@ -312,12 +314,16 @@
   const deckId = params.get('deck');
   if (!deckId) window.location.href = 'index.html';
 
-  let currentMode = 'text';
   let currentSide = 'front';
+  // Each side now has its OWN content type — front can be a photo while
+  // back is typed text, etc. This used to be one global "mode" applied to
+  // both sides at once, which forced a photo card to have a photo on both
+  // faces; that's backwards for how flashcards actually work (the answer
+  // explaining a photo is rarely itself another unrelated photo).
+  const sideType = { front: 'text', back: 'text' };
 
   const state = {
     text: { front: '', back: '' },
-    drawBlob: { front: null, back: null },
     photoBlob: { front: null, back: null },
   };
 
@@ -325,43 +331,47 @@
     document.getElementById('deckLabel').textContent = deck ? `Adding to: ${deck.name}` : 'Deck not found';
   });
 
-  // Mode tabs
+  function renderActivePanel() {
+    const type = sideType[currentSide];
+
+    document.querySelectorAll('.side-toggle button').forEach((b) => {
+      b.classList.toggle('active', b.dataset.side === currentSide);
+    });
+    document.querySelectorAll('.mode-tabs button').forEach((b) => {
+      b.classList.toggle('active', b.dataset.mode === type);
+    });
+
+    document.getElementById('textInputFront').style.display = (currentSide === 'front' && type === 'text') ? 'block' : 'none';
+    document.getElementById('textInputBack').style.display = (currentSide === 'back' && type === 'text') ? 'block' : 'none';
+
+    const drawFrontVisible = currentSide === 'front' && type === 'draw';
+    const drawBackVisible = currentSide === 'back' && type === 'draw';
+    document.getElementById('drawCanvasFront').style.display = drawFrontVisible ? 'block' : 'none';
+    document.getElementById('drawCanvasBack').style.display = drawBackVisible ? 'block' : 'none';
+    document.getElementById('drawChrome').style.display = type === 'draw' ? 'block' : 'none';
+    if (drawFrontVisible) drawPadFront.ensureSized();
+    if (drawBackVisible) drawPadBack.ensureSized();
+    if (type === 'draw') syncSlidersToActiveTool();
+
+    document.getElementById('photoAreaFront').style.display = (currentSide === 'front' && type === 'photo') ? 'block' : 'none';
+    document.getElementById('photoAreaBack').style.display = (currentSide === 'back' && type === 'photo') ? 'block' : 'none';
+  }
+
+  // Mode tabs — set the type for whichever side is currently selected.
   document.querySelectorAll('.mode-tabs button').forEach((btn) => {
     btn.addEventListener('click', () => {
-      document.querySelectorAll('.mode-tabs button').forEach((b) => b.classList.remove('active'));
-      btn.classList.add('active');
-      currentMode = btn.dataset.mode;
-      document.querySelectorAll('.mode-panel').forEach((p) => {
-        p.style.display = p.dataset.panel === currentMode ? 'block' : 'none';
-      });
-      if (currentMode === 'draw') {
-        // Panel just became visible — size whichever canvas is currently shown.
-        (currentSide === 'front' ? drawPadFront : drawPadBack).ensureSized();
-      }
+      sideType[currentSide] = btn.dataset.mode;
+      renderActivePanel();
     });
   });
 
   // Side toggle
   document.querySelectorAll('.side-toggle button').forEach((btn) => {
     btn.addEventListener('click', () => {
-      document.querySelectorAll('.side-toggle button').forEach((b) => b.classList.remove('active'));
-      btn.classList.add('active');
       currentSide = btn.dataset.side;
-      updateSideVisibility();
-      if (currentMode === 'draw') {
-        (currentSide === 'front' ? drawPadFront : drawPadBack).ensureSized();
-      }
+      renderActivePanel();
     });
   });
-
-  function updateSideVisibility() {
-    document.getElementById('textInputFront').style.display = currentSide === 'front' ? 'block' : 'none';
-    document.getElementById('textInputBack').style.display = currentSide === 'back' ? 'block' : 'none';
-    document.getElementById('drawCanvasFront').style.display = currentSide === 'front' ? 'block' : 'none';
-    document.getElementById('drawCanvasBack').style.display = currentSide === 'back' ? 'block' : 'none';
-    document.getElementById('photoAreaFront').style.display = currentSide === 'front' ? 'block' : 'none';
-    document.getElementById('photoAreaBack').style.display = currentSide === 'back' ? 'block' : 'none';
-  }
 
   document.getElementById('textInputFront').addEventListener('input', (e) => (state.text.front = e.target.value));
   document.getElementById('textInputBack').addEventListener('input', (e) => (state.text.back = e.target.value));
@@ -440,8 +450,6 @@
     });
   });
 
-  syncSlidersToActiveTool();
-
   // Photo capture — two explicit sources per side (camera vs gallery),
   // rather than one ambiguous input whose behavior varies by browser/OS.
   function wirePhoto(side) {
@@ -485,25 +493,41 @@
   const photoUiFront = wirePhoto('front');
   const photoUiBack = wirePhoto('back');
 
-  async function buildCardPayload() {
-    const card = { deckId, type: currentMode, front: {}, back: {} };
+  renderActivePanel();
 
-    if (currentMode === 'text') {
-      card.front.text = state.text.front.trim();
-      card.back.text = state.text.back.trim();
-      if (!card.front.text && !card.back.text) return null;
-    } else if (currentMode === 'draw') {
-      const frontEmpty = drawPadFront.isEmpty();
-      const backEmpty = drawPadBack.isEmpty();
-      if (frontEmpty && backEmpty) return null;
-      if (!frontEmpty) card.front.imageBlob = await drawPadFront.toBlob();
-      if (!backEmpty) card.back.imageBlob = await drawPadBack.toBlob();
-    } else if (currentMode === 'photo') {
-      if (!state.photoBlob.front && !state.photoBlob.back) return null;
-      if (state.photoBlob.front) card.front.imageBlob = state.photoBlob.front;
-      if (state.photoBlob.back) card.back.imageBlob = state.photoBlob.back;
+  // Builds one face (front or back) independently, based on THAT side's own
+  // selected type — this is the whole point of the per-side model: front
+  // can be a photo while back is typed text, etc.
+  async function buildFace(side) {
+    const type = sideType[side];
+    if (type === 'text') {
+      const text = state.text[side].trim();
+      return text ? { kind: 'text', text } : null;
     }
-    return card;
+    if (type === 'draw') {
+      const pad = side === 'front' ? drawPadFront : drawPadBack;
+      if (pad.isEmpty()) return null;
+      return { kind: 'draw', imageBlob: await pad.toBlob() };
+    }
+    if (type === 'photo') {
+      const blob = state.photoBlob[side];
+      return blob ? { kind: 'photo', imageBlob: blob } : null;
+    }
+    return null;
+  }
+
+  async function buildCardPayload() {
+    const front = await buildFace('front');
+    const back = await buildFace('back');
+    if (!front && !back) return null;
+    return {
+      deckId,
+      // Legacy summary field some older screens still read; per-face
+      // `kind` on front/back is the source of truth going forward.
+      type: (front && front.kind) || (back && back.kind) || 'text',
+      front: front || {},
+      back: back || {},
+    };
   }
 
   function resetForm() {
@@ -515,6 +539,9 @@
     state.photoBlob = { front: null, back: null };
     photoUiFront.reset();
     photoUiBack.reset();
+    // Deliberately NOT resetting sideType — if you just added a
+    // photo-front/text-back card, you're likely adding several more like
+    // it, so keep the same type selection for the next one.
   }
 
   function showToast(msg) {
