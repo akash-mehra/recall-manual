@@ -121,8 +121,9 @@
   }
   .slider-group { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 140px; }
   .slider-group label { font-size: 0.72rem; color: var(--ink-soft); flex-shrink: 0; width: 46px; }
-  .slider-group input[type="range"] { flex: 1; accent-color: var(--blossom); }
+  .slider-group input[type="range"] { flex: 1; min-width: 60px; accent-color: var(--blossom); }
   .slider-group .slider-value { font-size: 0.7rem; color: var(--ink-soft); width: 30px; text-align: right; flex-shrink: 0; }
+  .slider-group.disabled { opacity: 0.4; pointer-events: none; }
 
   .photo-drop {
     border: 2px dashed var(--glass-border);
@@ -219,7 +220,7 @@
             <input type="range" id="sizeSlider" min="1" max="8" step="0.5" value="2.5" />
             <span class="slider-value" id="sizeValue">2.5</span>
           </div>
-          <div class="slider-group" id="opacityGroup" style="display:none">
+          <div class="slider-group" id="opacityGroup">
             <label for="opacitySlider">Opacity</label>
             <input type="range" id="opacitySlider" min="10" max="70" step="1" value="28" />
             <span class="slider-value" id="opacityValue">28%</span>
@@ -349,12 +350,10 @@
     sizeValue.textContent = category === 'pencil' ? size : Math.round(size);
 
     const isHighlighterActive = category === 'highlighter';
-    opacityGroup.style.display = isHighlighterActive ? 'flex' : 'none';
-    if (isHighlighterActive) {
-      const pct = Math.round(drawPadFront.getHighlighterOpacity() * 100);
-      opacitySlider.value = pct;
-      opacityValue.textContent = pct + '%';
-    }
+    opacityGroup.classList.toggle('disabled', !isHighlighterActive);
+    const pct = Math.round(drawPadFront.getHighlighterOpacity() * 100);
+    opacitySlider.value = pct;
+    opacityValue.textContent = pct + '%';
   }
 
   sizeSlider.addEventListener('input', () => {

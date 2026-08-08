@@ -3,7 +3,7 @@
    available offline.
 */
 
-const CACHE_NAME = 'recall-manual-v9';
+const CACHE_NAME = 'recall-manual-v10';
 const ASSETS = [
   'index.html',
   'study.html',
@@ -44,12 +44,16 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
   const url = new URL(event.request.url);
-  const isAppScript = url.origin === self.location.origin && url.pathname.endsWith('.js');
+  const isOwnOrigin = url.origin === self.location.origin;
+  const isAppFile = isOwnOrigin && /\.(js|html)$/.test(url.pathname);
+  const isNavigation = event.request.mode === 'navigate';
 
-  if (isAppScript) {
-    // Network-first for our own JS: always try to get the latest code first,
-    // only fall back to cache if offline. Avoids silently serving stale
-    // config/logic after a deploy (bit us once already with firebase-init.js).
+  if (isAppFile || isNavigation) {
+    // Network-first for our own JS/HTML (and any navigation request): during
+    // active development, always try to get the latest code first, only
+    // falling back to cache if offline. Cache-first here has repeatedly bit
+    // us with stale pages/scripts surviving a deploy — freshness matters
+    // more than offline availability while this app is still in flux.
     event.respondWith(
       fetch(event.request)
         .then((res) => {
