@@ -165,8 +165,9 @@ html.theme-dark {
    with the falling-stars layer or any glass cards beneath it. */
 #recall-moon {
   position: fixed;
-  top: 92px;
-  right: 22px;
+  left: 18px;
+  top: 50%;
+  transform: translateY(-50%);
   width: 40px;
   height: 40px;
   border-radius: 50%;
