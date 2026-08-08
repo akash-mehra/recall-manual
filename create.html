@@ -111,6 +111,19 @@
   }
   .swatch.eraser-swatch svg { width: 15px; height: 15px; }
 
+  .brush-sliders {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--glass-border);
+  }
+  .slider-group { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 140px; }
+  .slider-group label { font-size: 0.72rem; color: var(--ink-soft); flex-shrink: 0; width: 46px; }
+  .slider-group input[type="range"] { flex: 1; accent-color: var(--blossom); }
+  .slider-group .slider-value { font-size: 0.7rem; color: var(--ink-soft); width: 30px; text-align: right; flex-shrink: 0; }
+
   .photo-drop {
     border: 2px dashed var(--glass-border);
     border-radius: var(--radius-sm);
@@ -199,6 +212,18 @@
             </div>
           </div>
           <button class="clear-btn" id="clearDrawBtn">Clear</button>
+        </div>
+        <div class="brush-sliders">
+          <div class="slider-group">
+            <label for="sizeSlider">Size</label>
+            <input type="range" id="sizeSlider" min="1" max="8" step="0.5" value="2.5" />
+            <span class="slider-value" id="sizeValue">2.5</span>
+          </div>
+          <div class="slider-group" id="opacityGroup" style="display:none">
+            <label for="opacitySlider">Opacity</label>
+            <input type="range" id="opacitySlider" min="10" max="70" step="1" value="28" />
+            <span class="slider-value" id="opacityValue">28%</span>
+          </div>
         </div>
       </div>
 
@@ -301,6 +326,52 @@
 
   // Brush color/tool selection — applies to both pads so front/back share
   // the same active pencil, highlighter, or eraser.
+  const sizeSlider = document.getElementById('sizeSlider');
+  const sizeValue = document.getElementById('sizeValue');
+  const opacityGroup = document.getElementById('opacityGroup');
+  const opacitySlider = document.getElementById('opacitySlider');
+  const opacityValue = document.getElementById('opacityValue');
+
+  const SIZE_RANGES = {
+    pencil: { min: 1, max: 8, step: 0.5 },
+    highlighter: { min: 6, max: 30, step: 1 },
+    eraser: { min: 10, max: 45, step: 1 },
+  };
+
+  function syncSlidersToActiveTool() {
+    const category = drawPadFront.getActiveCategory();
+    const range = SIZE_RANGES[category];
+    sizeSlider.min = range.min;
+    sizeSlider.max = range.max;
+    sizeSlider.step = range.step;
+    const size = drawPadFront.getSizeForActiveTool();
+    sizeSlider.value = size;
+    sizeValue.textContent = category === 'pencil' ? size : Math.round(size);
+
+    const isHighlighterActive = category === 'highlighter';
+    opacityGroup.style.display = isHighlighterActive ? 'flex' : 'none';
+    if (isHighlighterActive) {
+      const pct = Math.round(drawPadFront.getHighlighterOpacity() * 100);
+      opacitySlider.value = pct;
+      opacityValue.textContent = pct + '%';
+    }
+  }
+
+  sizeSlider.addEventListener('input', () => {
+    const val = parseFloat(sizeSlider.value);
+    sizeValue.textContent = drawPadFront.getActiveCategory() === 'pencil' ? val : Math.round(val);
+    drawPadFront.setSize(val);
+    drawPadBack.setSize(val);
+  });
+
+  opacitySlider.addEventListener('input', () => {
+    const pct = parseInt(opacitySlider.value, 10);
+    opacityValue.textContent = pct + '%';
+    const alpha = pct / 100;
+    drawPadFront.setHighlighterOpacity(alpha);
+    drawPadBack.setHighlighterOpacity(alpha);
+  });
+
   document.querySelectorAll('.swatch').forEach((btn) => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.swatch').forEach((b) => b.classList.remove('selected'));
@@ -309,6 +380,7 @@
       if (btn.dataset.eraser === 'true') {
         drawPadFront.setEraser();
         drawPadBack.setEraser();
+        syncSlidersToActiveTool();
         return;
       }
 
@@ -317,8 +389,11 @@
       const hex = palette[btn.dataset.color];
       drawPadFront.setTool(hex, isHighlighter);
       drawPadBack.setTool(hex, isHighlighter);
+      syncSlidersToActiveTool();
     });
   });
+
+  syncSlidersToActiveTool();
 
   // Photo capture
   function wirePhoto(side) {
