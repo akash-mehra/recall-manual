@@ -3,7 +3,7 @@
    available offline.
 */
 
-const CACHE_NAME = 'recall-manual-v14';
+const CACHE_NAME = 'recall-manual-v15';
 const ASSETS = [
   'index.html',
   'study.html',
