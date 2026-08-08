@@ -125,16 +125,34 @@
   .slider-group .slider-value { font-size: 0.7rem; color: var(--ink-soft); width: 30px; text-align: right; flex-shrink: 0; }
   .slider-group.disabled { opacity: 0.4; pointer-events: none; }
 
-  .photo-drop {
-    border: 2px dashed var(--glass-border);
+  .photo-source-buttons { display: flex; gap: 10px; }
+  .photo-source-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 16px 10px;
     border-radius: var(--radius-sm);
-    padding: 30px;
-    text-align: center;
-    color: var(--ink-soft);
+    border: 1px solid var(--glass-border);
+    background: rgba(255,255,255,0.55);
+    color: var(--ink);
+    font-size: 0.78rem;
+    font-weight: 600;
     cursor: pointer;
-    font-size: 0.85rem;
   }
+  .photo-source-btn svg { width: 22px; height: 22px; color: var(--ink-soft); }
   .photo-preview { width: 100%; border-radius: var(--radius-sm); margin-top: 10px; display: none; }
+  .photo-replace-row { display: flex; gap: 8px; margin-top: 8px; display: none; }
+  .photo-replace-row button {
+    flex: 1;
+    font-size: 0.75rem;
+    padding: 7px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--glass-border);
+    background: rgba(255,255,255,0.5);
+    cursor: pointer;
+  }
 
   .save-row { margin-top: 20px; display: flex; gap: 10px; }
   .save-row button { flex: 1; }
@@ -230,13 +248,45 @@
 
       <!-- Photo mode -->
       <div class="mode-panel" data-panel="photo" style="display:none">
-        <div class="photo-drop" id="photoDropFront">Tap to capture or choose a photo (front)</div>
-        <img class="photo-preview" id="photoPreviewFront" />
-        <input type="file" accept="image/*" id="photoInputFront" style="display:none" />
+        <div id="photoAreaFront">
+          <div class="photo-source-buttons" id="photoSourceFront">
+            <button class="photo-source-btn" data-target="front" data-source="camera">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+              Camera
+            </button>
+            <button class="photo-source-btn" data-target="front" data-source="gallery">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="M21 15l-5-5L5 21"></path></svg>
+              Gallery
+            </button>
+          </div>
+          <img class="photo-preview" id="photoPreviewFront" />
+          <div class="photo-replace-row" id="photoReplaceFront">
+            <button data-target="front" data-source="camera">Retake photo</button>
+            <button data-target="front" data-source="gallery">Choose different</button>
+          </div>
+        </div>
+        <input type="file" accept="image/*" capture="environment" id="photoInputFrontCamera" style="display:none" />
+        <input type="file" accept="image/*" id="photoInputFrontGallery" style="display:none" />
 
-        <div class="photo-drop" id="photoDropBack" style="display:none; margin-top:14px">Tap to capture or choose a photo (back)</div>
-        <img class="photo-preview" id="photoPreviewBack" style="display:none" />
-        <input type="file" accept="image/*" id="photoInputBack" style="display:none" />
+        <div id="photoAreaBack" style="display:none; margin-top:14px">
+          <div class="photo-source-buttons" id="photoSourceBack">
+            <button class="photo-source-btn" data-target="back" data-source="camera">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+              Camera
+            </button>
+            <button class="photo-source-btn" data-target="back" data-source="gallery">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="M21 15l-5-5L5 21"></path></svg>
+              Gallery
+            </button>
+          </div>
+          <img class="photo-preview" id="photoPreviewBack" />
+          <div class="photo-replace-row" id="photoReplaceBack">
+            <button data-target="back" data-source="camera">Retake photo</button>
+            <button data-target="back" data-source="gallery">Choose different</button>
+          </div>
+        </div>
+        <input type="file" accept="image/*" capture="environment" id="photoInputBackCamera" style="display:none" />
+        <input type="file" accept="image/*" id="photoInputBackGallery" style="display:none" />
       </div>
     </div>
 
@@ -309,10 +359,8 @@
     document.getElementById('textInputBack').style.display = currentSide === 'back' ? 'block' : 'none';
     document.getElementById('drawCanvasFront').style.display = currentSide === 'front' ? 'block' : 'none';
     document.getElementById('drawCanvasBack').style.display = currentSide === 'back' ? 'block' : 'none';
-    document.getElementById('photoDropFront').style.display = currentSide === 'front' ? 'block' : 'none';
-    document.getElementById('photoPreviewFront').style.display = currentSide === 'front' && state.photoBlob.front ? 'block' : 'none';
-    document.getElementById('photoDropBack').style.display = currentSide === 'back' ? 'block' : 'none';
-    document.getElementById('photoPreviewBack').style.display = currentSide === 'back' && state.photoBlob.back ? 'block' : 'none';
+    document.getElementById('photoAreaFront').style.display = currentSide === 'front' ? 'block' : 'none';
+    document.getElementById('photoAreaBack').style.display = currentSide === 'back' ? 'block' : 'none';
   }
 
   document.getElementById('textInputFront').addEventListener('input', (e) => (state.text.front = e.target.value));
@@ -394,25 +442,48 @@
 
   syncSlidersToActiveTool();
 
-  // Photo capture
+  // Photo capture — two explicit sources per side (camera vs gallery),
+  // rather than one ambiguous input whose behavior varies by browser/OS.
   function wirePhoto(side) {
-    const drop = document.getElementById(`photoDrop${cap(side)}`);
-    const input = document.getElementById(`photoInput${cap(side)}`);
-    const preview = document.getElementById(`photoPreview${cap(side)}`);
-    drop.addEventListener('click', () => input.click());
-    input.addEventListener('change', async () => {
-      const file = input.files[0];
+    const cap = side.charAt(0).toUpperCase() + side.slice(1);
+    const cameraInput = document.getElementById(`photoInput${cap}Camera`);
+    const galleryInput = document.getElementById(`photoInput${cap}Gallery`);
+    const preview = document.getElementById(`photoPreview${cap}`);
+    const sourceButtons = document.getElementById(`photoSource${cap}`);
+    const replaceRow = document.getElementById(`photoReplace${cap}`);
+
+    async function handleFile(file) {
       if (!file) return;
       const blob = await compressImageFile(file);
       state.photoBlob[side] = blob;
       preview.src = URL.createObjectURL(blob);
       preview.style.display = 'block';
-      drop.textContent = 'Tap to replace photo';
+      sourceButtons.style.display = 'none';
+      replaceRow.style.display = 'flex';
+    }
+
+    cameraInput.addEventListener('change', () => handleFile(cameraInput.files[0]));
+    galleryInput.addEventListener('change', () => handleFile(galleryInput.files[0]));
+
+    // Both the initial source buttons and the post-capture "replace" row
+    // use the same data-source routing to the right hidden input.
+    document.querySelectorAll(`[data-target="${side}"]`).forEach((btn) => {
+      btn.addEventListener('click', () => {
+        (btn.dataset.source === 'camera' ? cameraInput : galleryInput).click();
+      });
     });
+
+    return {
+      reset() {
+        preview.style.display = 'none';
+        preview.src = '';
+        sourceButtons.style.display = 'flex';
+        replaceRow.style.display = 'none';
+      },
+    };
   }
-  wirePhoto('front');
-  wirePhoto('back');
-  function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+  const photoUiFront = wirePhoto('front');
+  const photoUiBack = wirePhoto('back');
 
   async function buildCardPayload() {
     const card = { deckId, type: currentMode, front: {}, back: {} };
@@ -442,10 +513,8 @@
     drawPadFront.clear();
     drawPadBack.clear();
     state.photoBlob = { front: null, back: null };
-    document.getElementById('photoPreviewFront').style.display = 'none';
-    document.getElementById('photoPreviewBack').style.display = 'none';
-    document.getElementById('photoDropFront').textContent = 'Tap to capture or choose a photo (front)';
-    document.getElementById('photoDropBack').textContent = 'Tap to capture or choose a photo (back)';
+    photoUiFront.reset();
+    photoUiBack.reset();
   }
 
   function showToast(msg) {
