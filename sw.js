@@ -3,18 +3,21 @@
    available offline.
 */
 
-const CACHE_NAME = 'recall-manual-v16';
+const CACHE_NAME = 'recall-manual-v17';
 const ASSETS = [
   'index.html',
   'study.html',
   'create.html',
   'settings.html',
   'library.html',
+  'search.html',
+  'stats.html',
   'manifest.json',
   'css/theme.css',
   'js/db.js',
   'js/sakura.js',
   'js/study.js',
+  'js/srs.js',
   'js/canvas-draw.js',
   'js/camera-capture.js',
   'js/backup.js',
@@ -23,6 +26,7 @@ const ASSETS = [
   'js/nav.js',
   'js/theme.js',
   'js/stars.js',
+  'js/offline.js',
   'icons/icon-192.png',
   'icons/icon-512.png',
 ];

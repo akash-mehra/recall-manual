@@ -17,7 +17,7 @@
 <style>
   .back-link { font-size: 0.85rem; color: var(--ink-soft); }
   .header-row { display: flex; align-items: center; justify-content: space-between; }
-  .hide-struck-label {
+  .study-all-label {
     display: flex; align-items: center; gap: 6px;
     font-size: 0.78rem; color: var(--ink-soft);
   }
@@ -39,9 +39,16 @@
 
   #cardStage {
     perspective: 1400px;
-    margin: 28px 0;
+    margin: 28px 0 8px;
     display: flex;
     justify-content: center;
+  }
+
+  .flip-hint {
+    text-align: center;
+    font-size: 0.75rem;
+    color: var(--ink-soft);
+    margin-bottom: 18px;
   }
 
   .flip-card {
@@ -53,7 +60,7 @@
     transition: transform 0.5s cubic-bezier(.4,.2,.2,1);
     cursor: pointer;
   }
-  .flip-card.flipped { transform: rotateY(180deg); }
+  .flip-card.flipped { transform: rotateY(180deg); cursor: default; }
 
   .card-face {
     position: absolute;
@@ -88,43 +95,39 @@
     object-fit: contain;
   }
 
-  /* Color-state tinting */
-  .flip-card.tag-green .card-face { box-shadow: 0 8px 32px rgba(143, 188, 148, 0.35), inset 0 0 0 2px var(--tag-green); }
-  .flip-card.tag-yellow .card-face { box-shadow: 0 8px 32px rgba(232, 184, 114, 0.35), inset 0 0 0 2px var(--tag-yellow); }
-  .flip-card.tag-red .card-face { box-shadow: 0 8px 32px rgba(224, 138, 138, 0.35), inset 0 0 0 2px var(--tag-red); }
-
-  /* Struck state */
-  .flip-card.struck .card-face { opacity: 0.55; }
-  .flip-card.struck .card-text { text-decoration: line-through; text-decoration-color: var(--ink-soft); }
-
-  .controls-row {
+  .rating-row {
+    display: none;
+    gap: 8px;
+    margin-top: 18px;
+  }
+  .rating-btn {
+    flex: 1;
     display: flex;
+    flex-direction: column;
     align-items: center;
-    justify-content: center;
-    gap: 18px;
-    margin-top: 6px;
-  }
-  .color-dots { display: flex; gap: 10px; }
-  .color-dot {
-    width: 26px; height: 26px;
-    border-radius: 50%;
-    border: 2px solid rgba(255,255,255,0.8);
-    cursor: pointer;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-  }
-  .color-dot[data-color="green"] { background: var(--tag-green); }
-  .color-dot[data-color="yellow"] { background: var(--tag-yellow); }
-  .color-dot[data-color="red"] { background: var(--tag-red); }
-  .color-dot.selected { box-shadow: 0 0 0 3px var(--ink); }
-
-  .strike-btn {
-    border: 1px solid var(--glass-border);
-    background: var(--glass-fill-strong);
-    padding: 8px 16px;
+    gap: 3px;
+    padding: 12px 6px;
     border-radius: var(--radius-sm);
-    font-size: 0.82rem;
-    font-weight: 600;
-    color: var(--ink);
+    border: none;
+    cursor: pointer;
+    font-family: var(--font-body);
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: white;
+  }
+  .rating-btn .rating-interval { font-size: 0.68rem; font-weight: 500; opacity: 0.85; }
+  .rating-btn[data-rating="again"] { background: var(--tag-red); }
+  .rating-btn[data-rating="hard"] { background: #e0a860; }
+  .rating-btn[data-rating="good"] { background: var(--tag-green); }
+  .rating-btn[data-rating="easy"] { background: var(--blossom); }
+
+  .retire-row { display: flex; justify-content: center; margin-top: 12px; }
+  .retire-btn {
+    border: none;
+    background: none;
+    color: var(--ink-soft);
+    font-size: 0.75rem;
+    text-decoration: underline;
     cursor: pointer;
   }
 
@@ -133,7 +136,7 @@
     gap: 12px;
     margin-top: 22px;
   }
-  .nav-row button { flex: 1; }
+  .nav-row button, .nav-row a { flex: 1; }
 
   .empty-state, .complete-state {
     text-align: center;
@@ -153,16 +156,16 @@
       <a class="back-link" href="index.html" id="backToDecksLink">&larr; Decks</a>
       <h1 id="deckName" style="margin-top:4px">Study</h1>
     </div>
-    <label class="hide-struck-label">
-      <input type="checkbox" id="hideStruckToggle" />
-      Hide struck
+    <label class="study-all-label">
+      <input type="checkbox" id="studyAllToggle" />
+      Study all cards
     </label>
   </div>
 
   <div class="container">
     <div id="studyArea">
       <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
-      <div class="progress-text" id="progressText">0 / 0</div>
+      <div class="progress-text" id="progressText">0 / 0 reviewed</div>
 
       <div id="cardStage">
         <div class="flip-card" id="flipCard">
@@ -170,19 +173,17 @@
           <div class="card-face card-back" id="cardBack"></div>
         </div>
       </div>
+      <div class="flip-hint" id="flipHint">Tap the card to reveal the answer</div>
 
-      <div class="controls-row">
-        <div class="color-dots">
-          <div class="color-dot" data-color="green" title="Know it"></div>
-          <div class="color-dot" data-color="yellow" title="Shaky"></div>
-          <div class="color-dot" data-color="red" title="Don't know"></div>
-        </div>
-        <button class="strike-btn" id="strikeBtn">Strike ✓</button>
+      <div class="rating-row" id="ratingRow">
+        <button class="rating-btn" data-rating="again">Again<span class="rating-interval"></span></button>
+        <button class="rating-btn" data-rating="hard">Hard<span class="rating-interval"></span></button>
+        <button class="rating-btn" data-rating="good">Good<span class="rating-interval"></span></button>
+        <button class="rating-btn" data-rating="easy">Easy<span class="rating-interval"></span></button>
       </div>
 
-      <div class="nav-row">
-        <button class="btn btn-ghost" id="prevBtn">Previous</button>
-        <button class="btn btn-primary" id="nextBtn">Next</button>
+      <div class="retire-row">
+        <button class="retire-btn" id="retireBtn">Retire this card (exclude from future reviews)</button>
       </div>
     </div>
 
@@ -192,10 +193,10 @@
     </div>
 
     <div class="complete-state" id="completeState">
-      <h2>Session complete 🌸</h2>
-      <p>Nice work. You can go through the deck again or head back to your decks.</p>
+      <h2>All caught up 🌸</h2>
+      <p>Nothing due right now. Come back later, or study the whole deck anyway using the toggle above.</p>
       <div class="nav-row" style="max-width:320px; margin:20px auto 0">
-        <button class="btn btn-ghost" id="restartBtn">Restart</button>
+        <button class="btn btn-ghost" id="restartBtn">Check again</button>
         <a class="btn btn-primary" href="index.html" id="completeDecksLink" style="text-align:center">Decks</a>
       </div>
     </div>
@@ -207,8 +208,10 @@
 <script src="js/drive-sync.js"></script>
 <script src="js/nav.js"></script>
 <script src="js/theme.js"></script>
+<script src="js/offline.js"></script>
 <script src="js/sakura.js"></script>
 <script src="js/stars.js"></script>
+<script src="js/srs.js"></script>
 <script src="js/study.js"></script>
 <script>
   if (RecallTheme.getTheme() === 'dark') { initStars(); } else { initSakura(); }

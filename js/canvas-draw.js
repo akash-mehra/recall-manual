@@ -180,6 +180,24 @@ function createDrawPad(canvas) {
 
   return {
     ensureSized,
+    loadImage(blob) {
+      // Pre-fills the pad with an existing image (edit mode) so further
+      // strokes layer on top of it, rather than starting from blank white.
+      return new Promise((resolve, reject) => {
+        if (!sized) resizeToDisplaySize();
+        const img = new Image();
+        img.onload = () => {
+          const cw = canvas.width / (window.devicePixelRatio || 1);
+          const ch = canvas.height / (window.devicePixelRatio || 1);
+          ctx.drawImage(img, 0, 0, cw, ch);
+          hasContent = true;
+          URL.revokeObjectURL(img.src);
+          resolve();
+        };
+        img.onerror = reject;
+        img.src = URL.createObjectURL(blob);
+      });
+    },
     setTool(color, highlighter = false) {
       currentColor = color;
       isHighlighter = highlighter;

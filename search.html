@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Search — Recall Manual</title>
+<link rel="stylesheet" href="css/theme.css" />
+<script>
+  (function () {
+    try {
+      if ((localStorage.getItem('recall_manual_theme') || 'light') === 'dark') {
+        document.documentElement.classList.add('theme-dark');
+      }
+    } catch (e) {}
+  })();
+</script>
+<style>
+  .back-link { font-size: 0.85rem; color: var(--ink-soft); }
+
+  .search-input-wrap { margin-top: 16px; position: relative; }
+  .search-input {
+    width: 100%;
+    padding: 14px 16px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--glass-border);
+    background: rgba(255,255,255,0.7);
+    font-family: var(--font-body);
+    font-size: 0.95rem;
+    color: var(--ink);
+  }
+
+  .search-results { margin-top: 18px; display: flex; flex-direction: column; gap: 10px; }
+  .result-row {
+    padding: 14px 16px;
+    cursor: pointer;
+  }
+  .result-deck { font-size: 0.7rem; color: var(--ink-soft); margin-bottom: 4px; }
+  .result-snippet { font-size: 0.92rem; color: var(--ink); line-height: 1.4; }
+  .result-snippet mark { background: var(--blossom); color: white; border-radius: 3px; padding: 0 2px; }
+  .result-type { font-size: 0.68rem; color: var(--ink-soft); background: rgba(255,255,255,0.6); padding: 2px 7px; border-radius: 8px; display: inline-block; margin-top: 6px; }
+
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--ink-soft);
+  }
+  .empty-state h2 { font-family: var(--font-display); color: var(--ink); margin-bottom: 8px; }
+</style>
+</head>
+<body>
+<canvas id="sakura-canvas"></canvas>
+
+<div class="app-shell">
+  <div class="topbar">
+    <div>
+      <a class="back-link" href="index.html" id="backToDecksLink">&larr; Decks</a>
+      <h1 style="margin-top:4px">Search</h1>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="search-input-wrap">
+      <input type="text" class="search-input" id="searchInput" placeholder="Search across all your cards…" autofocus />
+    </div>
+
+    <div class="search-results" id="searchResults"></div>
+    <div class="empty-state" id="emptyState" style="display:none">
+      <h2>Start typing</h2>
+      <p>Search looks through the text on every card, across every deck.</p>
+    </div>
+    <div class="empty-state" id="noResultsState" style="display:none">
+      <h2>No matches</h2>
+      <p>Try a different word — search only looks at typed text, not photos or drawings.</p>
+    </div>
+  </div>
+</div>
+
+<script src="js/auth.js"></script>
+<script src="js/db.js"></script>
+<script src="js/drive-sync.js"></script>
+<script src="js/nav.js"></script>
+<script src="js/theme.js"></script>
+<script src="js/offline.js"></script>
+<script src="js/sakura.js"></script>
+<script src="js/stars.js"></script>
+<script>
+  if (RecallTheme.getTheme() === 'dark') { initStars(); } else { initSakura(); }
+  document.getElementById('backToDecksLink').addEventListener('click', (e) => {
+    e.preventDefault();
+    RecallNav.goTo('index.html');
+  });
+
+  const searchInput = document.getElementById('searchInput');
+  const searchResults = document.getElementById('searchResults');
+  const emptyState = document.getElementById('emptyState');
+  const noResultsState = document.getElementById('noResultsState');
+
+  let indexData = []; // flat list of { deckId, deckName, cardId, side, text }
+
+  async function buildIndex() {
+    const decks = await RecallDB.Decks.all();
+    const rows = [];
+    for (const deck of decks) {
+      const cards = await RecallDB.Cards.byDeck(deck.id);
+      for (const card of cards) {
+        if (card.front && card.front.text) {
+          rows.push({ deckId: deck.id, deckName: deck.name, cardId: card.id, side: 'front', text: card.front.text });
+        }
+        if (card.back && card.back.text) {
+          rows.push({ deckId: deck.id, deckName: deck.name, cardId: card.id, side: 'back', text: card.back.text });
+        }
+      }
+    }
+    indexData = rows;
+  }
+
+  function escapeHtml(str) {
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+  }
+
+  function highlight(text, query) {
+    const escaped = escapeHtml(text);
+    const escapedQuery = escapeHtml(query).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return escaped.replace(new RegExp(`(${escapedQuery})`, 'ig'), '<mark>$1</mark>');
+  }
+
+  function snippet(text, query, radius = 60) {
+    const idx = text.toLowerCase().indexOf(query.toLowerCase());
+    if (idx === -1) return text.slice(0, radius * 2);
+    const start = Math.max(0, idx - radius);
+    const end = Math.min(text.length, idx + query.length + radius);
+    return (start > 0 ? '…' : '') + text.slice(start, end) + (end < text.length ? '…' : '');
+  }
+
+  function runSearch(query) {
+    searchResults.innerHTML = '';
+    if (!query.trim()) {
+      emptyState.style.display = 'block';
+      noResultsState.style.display = 'none';
+      return;
+    }
+    emptyState.style.display = 'none';
+
+    const q = query.trim().toLowerCase();
+    const matches = indexData.filter((row) => row.text.toLowerCase().includes(q));
+
+    noResultsState.style.display = matches.length ? 'none' : 'block';
+
+    matches.slice(0, 100).forEach((row) => {
+      const snip = snippet(row.text, query);
+      const el = document.createElement('div');
+      el.className = 'glass result-row';
+      el.innerHTML = `
+        <div class="result-deck">${escapeHtml(row.deckName)}</div>
+        <div class="result-snippet">${highlight(snip, query)}</div>
+        <div class="result-type">${row.side}</div>
+      `;
+      el.addEventListener('click', () => {
+        RecallNav.goTo(`study.html?deck=${row.deckId}`);
+      });
+      searchResults.appendChild(el);
+    });
+  }
+
+  let debounceTimer = null;
+  searchInput.addEventListener('input', () => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => runSearch(searchInput.value), 150);
+  });
+
+  buildIndex().then(() => runSearch(''));
+</script>
+</body>
+</html>

@@ -148,6 +148,17 @@
     padding: 2px 4px;
     flex-shrink: 0;
   }
+  .edit-card-btn {
+    background: none;
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+    color: var(--ink-soft);
+    font-size: 0.7rem;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 3px 9px;
+    flex-shrink: 0;
+  }
 
   .toast {
     position: fixed;
@@ -164,7 +175,18 @@
     transition: opacity 0.25s ease;
     z-index: 5;
   }
-  .toast.show { opacity: 1; }
+  .toast.show { opacity: 1; pointer-events: auto; }
+  .toast-undo-btn {
+    background: none;
+    border: none;
+    color: var(--blossom);
+    font-weight: 700;
+    text-decoration: underline;
+    cursor: pointer;
+    font-size: 0.85rem;
+    padding: 0;
+    margin-left: 4px;
+  }
 </style>
 </head>
 <body>
@@ -285,6 +307,7 @@
 <script src="js/drive-sync.js"></script>
 <script src="js/nav.js"></script>
 <script src="js/theme.js"></script>
+<script src="js/offline.js"></script>
 <script src="js/sakura.js"></script>
 <script src="js/stars.js"></script>
 <script src="js/backup.js"></script>
@@ -299,10 +322,44 @@
 
   function showToast(msg, duration = 1800) {
     const t = document.getElementById('toast');
+    t.innerHTML = '';
     t.textContent = msg;
     t.classList.add('show');
     clearTimeout(showToast._timer);
     showToast._timer = setTimeout(() => t.classList.remove('show'), duration);
+  }
+
+  /* Shows a toast with an inline Undo button. If tapped, onUndo() runs and
+     the pending deletion is cancelled; otherwise onCommit() runs once the
+     grace period elapses. Used so deleting a deck/card isn't instantly
+     final — a stray tap shouldn't be able to destroy data with no recovery. */
+  function showUndoToast(msg, { onUndo, onCommit, duration = 5000 }) {
+    const t = document.getElementById('toast');
+    clearTimeout(showToast._timer);
+    t.innerHTML = '';
+    const span = document.createElement('span');
+    span.textContent = msg + ' ';
+    const btn = document.createElement('button');
+    btn.textContent = 'Undo';
+    btn.className = 'toast-undo-btn';
+    let committed = false;
+    const timer = setTimeout(() => {
+      if (!committed) {
+        committed = true;
+        t.classList.remove('show');
+        onCommit();
+      }
+    }, duration);
+    btn.addEventListener('click', () => {
+      if (committed) return;
+      committed = true;
+      clearTimeout(timer);
+      t.classList.remove('show');
+      onUndo();
+    });
+    t.appendChild(span);
+    t.appendChild(btn);
+    t.classList.add('show');
   }
 
   const accountContent = document.getElementById('accountContent');
@@ -449,10 +506,12 @@
   });
   renderThemeSelection();
 
-  /* ---- Manage decks & cards (delete) ---- */
+  /* ---- Manage decks & cards (delete, with undo) ---- */
   const manageList = document.getElementById('manageList');
   const manageEmpty = document.getElementById('manageEmpty');
   const openDeckIds = new Set();
+  const pendingDeleteDeckIds = new Set();
+  const pendingDeleteCardIds = new Set();
 
   // A face's kind falls back to the legacy card-level type for cards
   // created before front/back had independent types.
@@ -484,12 +543,15 @@
   }
 
   async function renderManageList() {
-    const decks = await RecallDB.Decks.all();
+    const allDecks = await RecallDB.Decks.all();
+    const decks = allDecks.filter((d) => !pendingDeleteDeckIds.has(d.id));
     manageEmpty.style.display = decks.length ? 'none' : 'block';
     manageList.innerHTML = '';
 
     for (const deck of decks) {
-      const count = await RecallDB.Cards.count(deck.id);
+      const allCards = await RecallDB.Cards.byDeck(deck.id);
+      const cards = allCards.filter((c) => !pendingDeleteCardIds.has(c.id));
+      const count = cards.length;
       const wrap = document.createElement('div');
       wrap.className = 'manage-deck';
 
@@ -524,14 +586,21 @@
         }
       });
 
-      wrap.querySelector('.delete-deck-btn').addEventListener('click', async (e) => {
+      wrap.querySelector('.delete-deck-btn').addEventListener('click', (e) => {
         e.stopPropagation();
-        const ok = confirm(`Delete "${deck.name}" and all ${count} card(s) in it? This can't be undone.`);
-        if (!ok) return;
-        await RecallDB.Decks.remove(deck.id);
-        openDeckIds.delete(deck.id);
-        showToast('Deck deleted');
+        pendingDeleteDeckIds.add(deck.id);
         renderManageList();
+        showUndoToast(`Deleted "${deck.name}" (${count} card${count === 1 ? '' : 's'})`, {
+          onUndo: () => {
+            pendingDeleteDeckIds.delete(deck.id);
+            renderManageList();
+          },
+          onCommit: async () => {
+            await RecallDB.Decks.remove(deck.id);
+            pendingDeleteDeckIds.delete(deck.id);
+            renderManageList();
+          },
+        });
       });
 
       manageList.appendChild(wrap);
@@ -540,7 +609,8 @@
   }
 
   async function renderCardList(deckId, container) {
-    const cards = await RecallDB.Cards.byDeck(deckId);
+    const allCards = await RecallDB.Cards.byDeck(deckId);
+    const cards = allCards.filter((c) => !pendingDeleteCardIds.has(c.id));
     container.innerHTML = '';
     if (!cards.length) {
       container.innerHTML = `<div class="manage-card-preview">No cards in this deck.</div>`;
@@ -552,14 +622,26 @@
       row.innerHTML = `
         <span class="manage-card-type">${cardTypeLabel(card)}</span>
         <span class="manage-card-preview">${escapeHtml(cardPreviewText(card))}</span>
+        <button class="edit-card-btn" aria-label="Edit card">Edit</button>
         <button class="delete-card-btn" aria-label="Delete card">✕</button>
       `;
-      row.querySelector('.delete-card-btn').addEventListener('click', async () => {
-        const ok = confirm('Delete this card?');
-        if (!ok) return;
-        await RecallDB.Cards.remove(card.id);
-        showToast('Card deleted');
+      row.querySelector('.edit-card-btn').addEventListener('click', () => {
+        RecallNav.goTo(`create.html?deck=${deckId}&edit=${card.id}`);
+      });
+      row.querySelector('.delete-card-btn').addEventListener('click', () => {
+        pendingDeleteCardIds.add(card.id);
         renderManageList();
+        showUndoToast('Card deleted', {
+          onUndo: () => {
+            pendingDeleteCardIds.delete(card.id);
+            renderManageList();
+          },
+          onCommit: async () => {
+            await RecallDB.Cards.remove(card.id);
+            pendingDeleteCardIds.delete(card.id);
+            renderManageList();
+          },
+        });
       });
       container.appendChild(row);
     });

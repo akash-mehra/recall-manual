@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Stats — Recall Manual</title>
+<link rel="stylesheet" href="css/theme.css" />
+<script>
+  (function () {
+    try {
+      if ((localStorage.getItem('recall_manual_theme') || 'light') === 'dark') {
+        document.documentElement.classList.add('theme-dark');
+      }
+    } catch (e) {}
+  })();
+</script>
+<style>
+  .back-link { font-size: 0.85rem; color: var(--ink-soft); }
+
+  .section {
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .section h2 { font-size: 1rem; margin-bottom: 12px; }
+
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+  .stat-tile { text-align: center; padding: 12px 6px; }
+  .stat-value { font-family: var(--font-display); font-size: 1.5rem; color: var(--ink); }
+  .stat-label { font-size: 0.7rem; color: var(--ink-soft); margin-top: 2px; }
+
+  .bar-chart { display: flex; align-items: flex-end; gap: 6px; height: 100px; margin-top: 8px; }
+  .bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
+  .bar { width: 100%; border-radius: 4px 4px 0 0; background: var(--blossom); min-height: 3px; }
+  .bar-day-label { font-size: 0.62rem; color: var(--ink-soft); margin-top: 4px; }
+
+  .deck-stat-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--glass-border);
+    font-size: 0.85rem;
+  }
+  .deck-stat-row:last-child { border-bottom: none; }
+  .deck-stat-name { color: var(--ink); }
+  .deck-stat-meta { color: var(--ink-soft); font-size: 0.75rem; }
+
+  .empty-note {
+    text-align: center;
+    padding: 30px 20px;
+    color: var(--ink-soft);
+    font-size: 0.85rem;
+  }
+</style>
+</head>
+<body>
+<canvas id="sakura-canvas"></canvas>
+
+<div class="app-shell">
+  <div class="topbar">
+    <div>
+      <a class="back-link" href="index.html" id="backToDecksLink">&larr; Decks</a>
+      <h1 style="margin-top:4px">Stats</h1>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="glass section">
+      <h2>Overview</h2>
+      <div class="stat-grid">
+        <div class="stat-tile">
+          <div class="stat-value" id="statTotal">0</div>
+          <div class="stat-label">Reviews</div>
+        </div>
+        <div class="stat-tile">
+          <div class="stat-value" id="statAccuracy">–</div>
+          <div class="stat-label">Accuracy</div>
+        </div>
+        <div class="stat-tile">
+          <div class="stat-value" id="statStreak">0</div>
+          <div class="stat-label">Day streak</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="glass section">
+      <h2>Last 7 days</h2>
+      <div class="bar-chart" id="barChart"></div>
+    </div>
+
+    <div class="glass section">
+      <h2>By deck</h2>
+      <div id="deckStatsList"></div>
+      <div class="empty-note" id="statsEmptyNote" style="display:none">No reviews logged yet — study a deck to see stats here.</div>
+    </div>
+  </div>
+</div>
+
+<script src="js/auth.js"></script>
+<script src="js/db.js"></script>
+<script src="js/drive-sync.js"></script>
+<script src="js/nav.js"></script>
+<script src="js/theme.js"></script>
+<script src="js/offline.js"></script>
+<script src="js/sakura.js"></script>
+<script src="js/stars.js"></script>
+<script>
+  if (RecallTheme.getTheme() === 'dark') { initStars(); } else { initSakura(); }
+  document.getElementById('backToDecksLink').addEventListener('click', (e) => {
+    e.preventDefault();
+    RecallNav.goTo('index.html');
+  });
+
+  function escapeHtml(str) {
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+  }
+
+  function dayKey(ts) {
+    const d = new Date(ts);
+    return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+  }
+
+  async function render() {
+    const log = await RecallDB.ReviewLog.all();
+    const decks = await RecallDB.Decks.all();
+    const deckNameById = Object.fromEntries(decks.map((d) => [d.id, d.name]));
+
+    document.getElementById('statTotal').textContent = log.length;
+
+    if (log.length === 0) {
+      document.getElementById('statAccuracy').textContent = '–';
+      document.getElementById('statStreak').textContent = '0';
+      document.getElementById('statsEmptyNote').style.display = 'block';
+      renderBarChart([]);
+      return;
+    }
+
+    const good = log.filter((r) => r.rating === 'good' || r.rating === 'easy').length;
+    const accuracy = Math.round((good / log.length) * 100);
+    document.getElementById('statAccuracy').textContent = accuracy + '%';
+
+    document.getElementById('statStreak').textContent = computeStreak(log);
+
+    renderBarChart(log);
+    renderDeckBreakdown(log, deckNameById);
+  }
+
+  function computeStreak(log) {
+    const daysWithReviews = new Set(log.map((r) => dayKey(r.timestamp)));
+    let cursor = new Date();
+    // If today has no reviews yet, that alone shouldn't break a streak
+    // that's still "in progress" — start counting from yesterday instead.
+    if (!daysWithReviews.has(dayKey(cursor.getTime()))) {
+      cursor.setDate(cursor.getDate() - 1);
+    }
+    let streak = 0;
+    while (daysWithReviews.has(`${cursor.getFullYear()}-${cursor.getMonth()}-${cursor.getDate()}`)) {
+      streak++;
+      cursor.setDate(cursor.getDate() - 1);
+    }
+    return streak;
+  }
+
+  function renderBarChart(log) {
+    const chart = document.getElementById('barChart');
+    chart.innerHTML = '';
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      days.push(d);
+    }
+    const counts = days.map((d) => {
+      const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+      return log.filter((r) => dayKey(r.timestamp) === key).length;
+    });
+    const max = Math.max(1, ...counts);
+    days.forEach((d, i) => {
+      const col = document.createElement('div');
+      col.className = 'bar-col';
+      const heightPct = Math.max(4, (counts[i] / max) * 100);
+      col.innerHTML = `
+        <div class="bar" style="height:${heightPct}%" title="${counts[i]} reviews"></div>
+        <div class="bar-day-label">${d.toLocaleDateString(undefined, { weekday: 'short' }).slice(0, 2)}</div>
+      `;
+      chart.appendChild(col);
+    });
+  }
+
+  function renderDeckBreakdown(log, deckNameById) {
+    const byDeck = {};
+    log.forEach((r) => {
+      if (!byDeck[r.deckId]) byDeck[r.deckId] = { total: 0, good: 0 };
+      byDeck[r.deckId].total++;
+      if (r.rating === 'good' || r.rating === 'easy') byDeck[r.deckId].good++;
+    });
+
+    const list = document.getElementById('deckStatsList');
+    list.innerHTML = '';
+    const entries = Object.entries(byDeck).sort((a, b) => b[1].total - a[1].total);
+    entries.forEach(([deckId, stat]) => {
+      const acc = Math.round((stat.good / stat.total) * 100);
+      const row = document.createElement('div');
+      row.className = 'deck-stat-row';
+      row.innerHTML = `
+        <span class="deck-stat-name">${escapeHtml(deckNameById[deckId] || 'Deleted deck')}</span>
+        <span class="deck-stat-meta">${stat.total} reviews · ${acc}% accuracy</span>
+      `;
+      list.appendChild(row);
+    });
+  }
+
+  render();
+</script>
+</body>
+</html>

@@ -14,24 +14,40 @@ nothing is generated for you.
 - **Google sign-in + automatic Drive sync** — backs up to a hidden app-data
   folder in your Drive, whole-database last-write-wins sync
 - **Sakura petal ambient background**, light pastel theme
+- **Dark theme** — night sky palette, a small moon, and sparse shooting stars
+- **Spaced repetition (SM-2-derived)** — Again/Hard/Good/Easy ratings
+  reschedule each card; the dashboard shows how many are due per deck
+- **Card editing** and **undo-capable delete** for both cards and decks
+- **Search** across every deck's typed card text
+- **Stats** — total reviews, accuracy, day streak, per-deck breakdown
+- **Offline indicator** — banner shown while the browser has no connectivity
 - Installable PWA with offline app-shell caching
 
 ## Structure
 
 ```
-index.html      deck dashboard, sign-in, sync status
-create.html     add cards (type / draw / photo)
-study.html      flip-card study session
-css/theme.css   design tokens + glassmorphism
-js/db.js        IndexedDB wrapper (decks, cards, blobs) + sync dirty-hook
-js/sakura.js    falling petal canvas animation
+index.html      deck dashboard, sign-in, sync status, due-count badges
+create.html     add or edit cards (type / draw / photo), per-side content type
+study.html      SRS study session — flip, then rate Again/Hard/Good/Easy
+settings.html   account, backup frequency, manage/delete decks & cards, theme
+library.html    grid of every photo-type card across all decks
+search.html     full-text search across all decks' typed card content
+stats.html      review history, accuracy, streak, per-deck breakdown
+css/theme.css   design tokens + glassmorphism + dark theme overrides
+js/db.js        IndexedDB wrapper (decks, cards, reviewLog) + sync dirty-hook
+js/srs.js       SM-2-derived scheduling (Again/Hard/Good/Easy)
+js/sakura.js    falling petal canvas animation (light theme)
+js/stars.js     starfield + shooting stars canvas animation (dark theme)
+js/theme.js     light/dark theme switching, moon element
+js/offline.js   offline status banner
 js/study.js     study session logic
-js/canvas-draw.js     handwriting capture
+js/canvas-draw.js     handwriting capture (pencil/highlighter/eraser)
 js/camera-capture.js  photo capture + compression
 js/backup.js    export/import + payload builder used by Drive sync
-js/auth.js      Google sign-in via Google Identity Services (GIS), requests Drive scope
-js/drive-sync.js      Drive appDataFolder backup, auto-sync
-manifest.json, sw.js  PWA install + offline caching
+js/auth.js      Google sign-in via Google Identity Services, requests Drive scope
+js/drive-sync.js      Drive appDataFolder backup, configurable frequency
+js/nav.js       flushes pending sync before any deliberate in-app navigation
+manifest.json, sw.js  PWA install + offline caching (network-first for JS/HTML)
 ```
 
 ## Setting up Google sign-in + Drive sync

@@ -32,6 +32,16 @@
   .deck-card:hover { box-shadow: 0 12px 36px rgba(180, 120, 145, 0.26); }
   .deck-info h3 { font-size: 1.05rem; }
   .deck-info p { margin: 4px 0 0; font-size: 0.82rem; color: var(--ink-soft); }
+  .due-badge {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 2px 9px;
+    border-radius: 20px;
+    background: var(--blossom);
+    color: white;
+    font-size: 0.72rem;
+    font-weight: 700;
+  }
   .deck-actions { display: flex; gap: 8px; }
   .deck-actions button {
     background: var(--glass-fill-strong);
@@ -224,6 +234,19 @@
     </div>
     <div style="display:flex; align-items:center; gap:10px;">
       <div id="authArea" class="auth-area"></div>
+      <a class="settings-link" href="search.html" aria-label="Search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="7"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+      </a>
+      <a class="settings-link" href="stats.html" aria-label="Stats">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="6" y1="20" x2="6" y2="12"></line>
+          <line x1="12" y1="20" x2="12" y2="6"></line>
+          <line x1="18" y1="20" x2="18" y2="14"></line>
+        </svg>
+      </a>
       <a class="settings-link" href="library.html" aria-label="Photo library">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <rect x="3" y="3" width="18" height="18" rx="3"></rect>
@@ -278,11 +301,19 @@
 <script src="js/drive-sync.js"></script>
 <script src="js/nav.js"></script>
 <script src="js/theme.js"></script>
+<script src="js/offline.js"></script>
 <script src="js/sakura.js"></script>
 <script src="js/stars.js"></script>
 <script src="js/backup.js"></script>
 <script>
   if (RecallTheme.getTheme() === 'dark') { initStars(); } else { initSakura(); }
+
+  document.querySelectorAll('.settings-link[href]').forEach((link) => {
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      RecallNav.goTo(link.getAttribute('href'));
+    });
+  });
 
   function showToast(msg, duration = 1800) {
     const t = document.getElementById('toast');
@@ -419,13 +450,18 @@
     emptyState.style.display = decks.length ? 'none' : 'block';
 
     for (const deck of decks) {
-      const count = await RecallDB.Cards.count(deck.id);
+      const cards = await RecallDB.Cards.byDeck(deck.id);
+      const count = cards.length;
+      const dueCount = cards.filter((c) => RecallDB.Cards.isDue(c)).length;
       const el = document.createElement('div');
       el.className = 'glass deck-card';
       el.innerHTML = `
         <div class="deck-info">
           <h3>${escapeHtml(deck.name)}</h3>
-          <p>${count} card${count === 1 ? '' : 's'}${deck.subject ? ' · ' + escapeHtml(deck.subject) : ''}</p>
+          <p>
+            ${count} card${count === 1 ? '' : 's'}${deck.subject ? ' · ' + escapeHtml(deck.subject) : ''}
+            ${dueCount > 0 ? `<span class="due-badge">${dueCount} due</span>` : ''}
+          </p>
         </div>
         <div class="deck-actions">
           <button class="add-btn">Add cards</button>

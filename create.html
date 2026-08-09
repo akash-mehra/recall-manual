@@ -190,7 +190,7 @@
   <div class="topbar">
     <div>
       <a class="back-link" href="index.html">&larr; Decks</a>
-      <h1 style="margin-top:4px">Add a card</h1>
+      <h1 style="margin-top:4px" id="pageTitle">Add a card</h1>
     </div>
   </div>
 
@@ -315,6 +315,7 @@
 <script src="js/drive-sync.js"></script>
 <script src="js/nav.js"></script>
 <script src="js/theme.js"></script>
+<script src="js/offline.js"></script>
 <script src="js/sakura.js"></script>
 <script src="js/stars.js"></script>
 <script src="js/canvas-draw.js"></script>
@@ -324,6 +325,7 @@
 
   const params = new URLSearchParams(window.location.search);
   const deckId = params.get('deck');
+  const editCardId = params.get('edit');
   if (!deckId) window.location.href = 'index.html';
 
   let currentSide = 'front';
@@ -342,6 +344,12 @@
   RecallDB.Decks.get(deckId).then((deck) => {
     document.getElementById('deckLabel').textContent = deck ? `Adding to: ${deck.name}` : 'Deck not found';
   });
+
+  if (editCardId) {
+    document.getElementById('pageTitle').textContent = 'Edit card';
+    document.getElementById('saveAddAnotherBtn').style.display = 'none';
+    document.getElementById('saveDoneBtn').textContent = 'Save changes';
+  }
 
   function renderActivePanel() {
     const type = sideType[currentSide];
@@ -505,7 +513,45 @@
   const photoUiFront = wirePhoto('front');
   const photoUiBack = wirePhoto('back');
 
+  function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
   renderActivePanel();
+
+  async function loadForEdit() {
+    if (!editCardId) return;
+    const card = await RecallDB.Cards.get(editCardId);
+    if (!card) {
+      showToast('Card not found');
+      return;
+    }
+
+    for (const side of ['front', 'back']) {
+      const face = card[side] || {};
+      const kind = face.kind || (face.text ? 'text' : (face.imageBlob ? (card.type === 'draw' ? 'draw' : 'photo') : 'text'));
+      sideType[side] = kind;
+
+      if (kind === 'text') {
+        state.text[side] = face.text || '';
+        document.getElementById(`textInput${cap(side)}`).value = face.text || '';
+      } else if (kind === 'draw' && face.imageBlob) {
+        currentSide = side; // must be visible to size + draw onto it
+        renderActivePanel();
+        const pad = side === 'front' ? drawPadFront : drawPadBack;
+        await pad.loadImage(face.imageBlob);
+      } else if (kind === 'photo' && face.imageBlob) {
+        state.photoBlob[side] = face.imageBlob;
+        const Cap = cap(side);
+        document.getElementById(`photoPreview${Cap}`).src = URL.createObjectURL(face.imageBlob);
+        document.getElementById(`photoPreview${Cap}`).style.display = 'block';
+        document.getElementById(`photoSource${Cap}`).style.display = 'none';
+        document.getElementById(`photoReplace${Cap}`).style.display = 'flex';
+      }
+    }
+
+    currentSide = 'front';
+    renderActivePanel();
+  }
+  loadForEdit();
 
   // Builds one face (front or back) independently, based on THAT side's own
   // selected type — this is the whole point of the per-side model: front
@@ -569,7 +615,11 @@
       showToast('Add some content first');
       return false;
     }
-    await RecallDB.Cards.create(payload);
+    if (editCardId) {
+      await RecallDB.Cards.update(editCardId, payload);
+    } else {
+      await RecallDB.Cards.create(payload);
+    }
     return true;
   }
 
@@ -583,7 +633,7 @@
   document.getElementById('saveDoneBtn').addEventListener('click', async () => {
     if (await saveCard()) {
       showToast('Saving…');
-      RecallNav.goTo(`study.html?deck=${deckId}`);
+      RecallNav.goTo(editCardId ? 'settings.html' : `study.html?deck=${deckId}`);
     }
   });
 </script>

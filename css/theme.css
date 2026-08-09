@@ -185,3 +185,18 @@ html.theme-dark {
 .moon-crater-1 { width: 9px; height: 9px; top: 9px; left: 13px; }
 .moon-crater-2 { width: 6px; height: 6px; top: 22px; left: 24px; }
 .moon-crater-3 { width: 5px; height: 5px; top: 13px; left: 29px; }
+
+#recall-offline-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  background: #e8b872;
+  color: #3a2a10;
+  text-align: center;
+  font-size: 0.75rem;
+  padding: 7px 14px;
+  font-family: var(--font-body);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}

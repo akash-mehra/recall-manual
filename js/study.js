@@ -1,8 +1,8 @@
-/* study.js — session runner for the flip-card study screen.
-   Behavior ported from the original Recall app:
-   - tap/click card to flip between front and back
-   - color-tag cycle (none -> green -> yellow -> red -> none) as a confidence marker
-   - strike toggle marks a card as done/mastered, greys it out with a line-through
+/* study.js — SRS-driven study session.
+   Flow: tap to flip -> see the answer -> rate recall (Again/Hard/Good/
+   Easy) -> card gets rescheduled via srs.js and drops out of THIS
+   session's queue (it's no longer due right now). "Study all cards"
+   bypasses the due filter entirely for pre-exam cramming.
 */
 
 (function () {
@@ -13,6 +13,8 @@
     return;
   }
 
+  const STUDY_ALL_KEY = 'recall_manual_study_all_mode';
+
   const els = {
     deckName: document.getElementById('deckName'),
     progressText: document.getElementById('progressText'),
@@ -21,34 +23,40 @@
     card: document.getElementById('flipCard'),
     frontFace: document.getElementById('cardFront'),
     backFace: document.getElementById('cardBack'),
-    prevBtn: document.getElementById('prevBtn'),
-    nextBtn: document.getElementById('nextBtn'),
-    strikeBtn: document.getElementById('strikeBtn'),
-    colorDots: document.querySelectorAll('.color-dot'),
+    ratingRow: document.getElementById('ratingRow'),
+    retireBtn: document.getElementById('retireBtn'),
+    flipHint: document.getElementById('flipHint'),
     emptyState: document.getElementById('emptyState'),
     completeState: document.getElementById('completeState'),
     studyArea: document.getElementById('studyArea'),
     restartBtn: document.getElementById('restartBtn'),
-    hideStruckToggle: document.getElementById('hideStruckToggle'),
+    studyAllToggle: document.getElementById('studyAllToggle'),
   };
 
   let allCards = [];
   let sessionCards = [];
+  let sessionTotal = 0;
   let index = 0;
   let flipped = false;
-  let hideStruck = false;
+  let studyAll = localStorage.getItem(STUDY_ALL_KEY) === '1';
 
   async function init() {
     const deck = await RecallDB.Decks.get(deckId);
     els.deckName.textContent = deck ? deck.name : 'Deck';
     allCards = await RecallDB.Cards.byDeck(deckId);
+    els.studyAllToggle.checked = studyAll;
     buildSession();
     render();
   }
 
   function buildSession() {
-    sessionCards = hideStruck ? allCards.filter((c) => !c.struck) : allCards.slice();
-    if (index >= sessionCards.length) index = 0;
+    const now = Date.now();
+    const pool = studyAll
+      ? allCards.filter((c) => !c.struck)
+      : allCards.filter((c) => RecallDB.Cards.isDue(c, now));
+    sessionCards = pool.slice().sort((a, b) => (a.dueDate || 0) - (b.dueDate || 0));
+    sessionTotal = sessionCards.length;
+    index = 0;
   }
 
   function currentCard() {
@@ -56,6 +64,7 @@
   }
 
   function faceContent(face) {
+    if (!face) return '';
     if (face.imageBlob) {
       const url = URL.createObjectURL(face.imageBlob);
       return `<img src="${url}" alt="card image" class="card-image" />`;
@@ -83,82 +92,70 @@
     const card = currentCard();
     flipped = false;
     els.card.classList.remove('flipped');
+    els.ratingRow.style.display = 'none';
+    els.flipHint.style.display = 'block';
 
-    els.frontFace.innerHTML = faceContent(card.front || {});
-    els.backFace.innerHTML = faceContent(card.back || {});
+    els.frontFace.innerHTML = faceContent(card.front);
+    els.backFace.innerHTML = faceContent(card.back);
 
-    els.card.classList.toggle('struck', !!card.struck);
-    applyColorClass(card.colorTag);
+    const doneCount = sessionTotal - sessionCards.length;
+    els.progressText.textContent = `${doneCount} / ${sessionTotal} reviewed`;
+    els.progressFill.style.width = sessionTotal ? `${(doneCount / sessionTotal) * 100}%` : '0%';
 
-    els.progressText.textContent = `${index + 1} / ${sessionCards.length}`;
-    els.progressFill.style.width = `${((index + 1) / sessionCards.length) * 100}%`;
-
-    els.prevBtn.disabled = index === 0;
-    els.nextBtn.textContent = index === sessionCards.length - 1 ? 'Finish' : 'Next';
-
-    els.colorDots.forEach((dot) => {
-      dot.classList.toggle('selected', dot.dataset.color === card.colorTag);
-    });
+    updateRatingLabels(card);
   }
 
-  function applyColorClass(color) {
-    els.card.classList.remove('tag-green', 'tag-yellow', 'tag-red');
-    if (color) els.card.classList.add(`tag-${color}`);
+  function updateRatingLabels(card) {
+    const preview = RecallSRS.previewIntervals(card);
+    document.querySelectorAll('.rating-btn').forEach((btn) => {
+      const rating = btn.dataset.rating;
+      const label = btn.querySelector('.rating-interval');
+      if (label) label.textContent = RecallSRS.formatInterval(preview[rating]);
+    });
   }
 
   els.card.addEventListener('click', () => {
-    flipped = !flipped;
-    els.card.classList.toggle('flipped', flipped);
+    if (flipped) return; // once flipped, use the rating buttons, not another tap
+    flipped = true;
+    els.card.classList.add('flipped');
+    els.ratingRow.style.display = 'flex';
+    els.flipHint.style.display = 'none';
   });
 
-  els.nextBtn.addEventListener('click', () => {
-    if (index < sessionCards.length - 1) {
-      index++;
-      render();
-    } else {
-      els.studyArea.style.display = 'none';
-      els.completeState.style.display = 'block';
-    }
-  });
-
-  els.prevBtn.addEventListener('click', () => {
-    if (index > 0) {
-      index--;
-      render();
-    }
-  });
-
-  els.strikeBtn.addEventListener('click', async () => {
-    const card = currentCard();
-    const updated = await RecallDB.Cards.update(card.id, { struck: !card.struck });
-    Object.assign(card, updated);
-    if (hideStruck && card.struck) {
-      buildSession();
-    }
-    render();
-  });
-
-  els.colorDots.forEach((dot) => {
-    dot.addEventListener('click', async (e) => {
+  document.querySelectorAll('.rating-btn').forEach((btn) => {
+    btn.addEventListener('click', async (e) => {
       e.stopPropagation();
       const card = currentCard();
-      const color = dot.dataset.color;
-      const next = card.colorTag === color ? null : color;
-      const updated = await RecallDB.Cards.update(card.id, { colorTag: next });
+      const rating = btn.dataset.rating;
+      const result = RecallSRS.scheduleNext(card, rating);
+      const updated = await RecallDB.Cards.update(card.id, result);
+      await RecallDB.ReviewLog.add({ cardId: card.id, deckId, rating });
       Object.assign(card, updated);
+
+      sessionCards.splice(index, 1);
+      if (index >= sessionCards.length) index = 0;
       render();
     });
   });
 
+  els.retireBtn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const card = currentCard();
+    const updated = await RecallDB.Cards.update(card.id, { struck: true });
+    Object.assign(card, updated);
+    sessionCards.splice(index, 1);
+    if (index >= sessionCards.length) index = 0;
+    render();
+  });
+
   els.restartBtn.addEventListener('click', () => {
-    index = 0;
     buildSession();
     render();
   });
 
-  els.hideStruckToggle.addEventListener('change', (e) => {
-    hideStruck = e.target.checked;
-    index = 0;
+  els.studyAllToggle.addEventListener('change', (e) => {
+    studyAll = e.target.checked;
+    localStorage.setItem(STUDY_ALL_KEY, studyAll ? '1' : '0');
     buildSession();
     render();
   });
