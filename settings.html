@@ -298,6 +298,12 @@
       <div id="manageList"></div>
       <div class="disabled-note" id="manageEmpty" style="display:none">No decks yet.</div>
     </div>
+
+    <div class="glass section">
+      <h2>🧪 Experimental</h2>
+      <div class="section-sub">Extra pages that aren't part of the main app — separate storage, not synced to Drive, just for trying things out.</div>
+      <a class="btn btn-ghost experimental-link" href="experimental-photos.html" id="experimentalPhotosLink" style="display:flex; align-items:center; justify-content:center; text-decoration:none;">📸 Photo Flashcards (experimental)</a>
+    </div>
   </div>
 </div>
 
@@ -316,6 +322,10 @@
   document.getElementById('backToDecksLink').addEventListener('click', (e) => {
     e.preventDefault();
     RecallNav.goTo('index.html');
+  });
+  document.getElementById('experimentalPhotosLink').addEventListener('click', (e) => {
+    e.preventDefault();
+    RecallNav.goTo('experimental-photos.html');
   });
 </script>
 <script>
