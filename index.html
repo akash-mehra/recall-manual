@@ -393,6 +393,26 @@
     `;
   }
 
+  RecallSync.onStatus((status) => {
+    const badge = document.getElementById('syncBadge');
+    if (!badge) return;
+    badge.className = 'sync-badge ' + status;
+    badge.textContent = status === 'syncing' ? 'syncing…' : status === 'synced' ? 'synced' : status === 'error' ? 'sync error' : status;
+  });
+
+  // Registered BEFORE onAuthChange below on purpose: onAuthChange can fire
+  // synchronously (a cached session replays immediately), and reconcileOnSignIn's
+  // very first line calls setStatus('syncing') — if onStatus wasn't listening
+  // yet at that exact moment, that update is silently dropped and the badge
+  // never shows "syncing…" at all.
+
+  function withTimeout(promise, ms, label) {
+    return Promise.race([
+      promise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error(`${label} timed out after ${ms / 1000}s`)), ms)),
+    ]);
+  }
+
   RecallAuth.onAuthChange(async (user) => {
     if (user) {
       renderSignedIn(user);
@@ -400,14 +420,26 @@
         gateResolved = true;
         showApp();
       }
-      const result = await RecallSync.reconcileOnSignIn();
-      if (result.action === 'pulled') {
-        showToast(`Synced from Drive: ${result.deckCount} deck(s) restored`);
-        renderDecks();
-      } else if (result.action === 'pushed-initial' || result.action === 'pushed') {
-        showToast('Backed up to Drive');
-      } else if (result.action === 'error') {
-        showToast('Drive sync error: ' + result.message);
+      try {
+        // A hung network/token call would otherwise leave the badge stuck
+        // on "idle" forever with zero feedback — this guarantees SOME
+        // terminal state (success, explicit error, or timeout) every time.
+        const result = await withTimeout(RecallSync.reconcileOnSignIn(), 15000, 'Drive sync');
+        if (result.action === 'pulled') {
+          showToast(`Synced from Drive: ${result.deckCount} deck(s) restored`);
+          renderDecks();
+        } else if (result.action === 'pushed-initial' || result.action === 'pushed') {
+          showToast('Backed up to Drive');
+        } else if (result.action === 'error') {
+          showToast('Drive sync error: ' + result.message, 5000);
+        }
+      } catch (err) {
+        const badge = document.getElementById('syncBadge');
+        if (badge) {
+          badge.className = 'sync-badge error';
+          badge.textContent = 'sync error';
+        }
+        showToast('Drive sync error: ' + err.message, 6000);
       }
     } else {
       renderSignedOut();
@@ -420,13 +452,6 @@
         }
       }
     }
-  });
-
-  RecallSync.onStatus((status) => {
-    const badge = document.getElementById('syncBadge');
-    if (!badge) return;
-    badge.className = 'sync-badge ' + status;
-    badge.textContent = status === 'syncing' ? 'syncing…' : status === 'synced' ? 'synced' : status === 'error' ? 'sync error' : status;
   });
 
   const deckGrid = document.getElementById('deckGrid');

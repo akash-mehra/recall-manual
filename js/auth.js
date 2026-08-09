@@ -107,7 +107,18 @@ const RecallAuth = (function () {
   function requestToken({ silent }) {
     return new Promise(async (resolve, reject) => {
       const client = await ensureTokenClient();
+      // A silent GIS request that never calls back (seen on some iOS
+      // Safari/WebKit configurations) would otherwise hang this promise
+      // forever with no error — every caller up the chain (reconcile,
+      // backupNow, restoreNow) would just stall silently. A timeout here
+      // guarantees SOME resolution, at the actual likely hang point rather
+      // than only at the outermost caller.
+      const timeoutMs = silent ? 12000 : 45000; // interactive (popup) gets longer
+      const timer = setTimeout(() => {
+        reject(new Error(`Google sign-in ${silent ? 'silent refresh' : 'request'} timed out`));
+      }, timeoutMs);
       client.callback = (resp) => {
+        clearTimeout(timer);
         if (resp.error) return reject(resp);
         resolve(resp);
       };
