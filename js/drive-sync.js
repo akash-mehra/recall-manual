@@ -169,6 +169,35 @@ const RecallSync = (function () {
     }
   }
 
+  /* Explicit manual pull from settings — the counterpart to backupNow().
+     Overwrites local data with whatever's currently on Drive, regardless
+     of timestamps. Exists because the automatic reconcile-on-sign-in flow
+     has no visible "nothing to pull" signal if something's gone wrong —
+     this gives an explicit, debuggable way to force a restore and see
+     exactly what happened. */
+  async function restoreNow() {
+    if (!RecallAuth.getCurrentUser()) {
+      throw new Error('Sign in first to restore from Drive');
+    }
+    setStatus('syncing');
+    try {
+      const existing = await findBackupFile();
+      if (!existing) {
+        setStatus('synced');
+        return { action: 'none' };
+      }
+      const payload = await downloadBackup(existing.id);
+      await RecallBackup.replaceAllDataFromPayload(payload);
+      localStorage.setItem(LAST_SYNCED_AT_KEY, String(Date.now()));
+      setStatus('synced');
+      return { action: 'restored', deckCount: payload.decks.length };
+    } catch (err) {
+      console.error('Manual restore failed', err);
+      setStatus('error', err.message);
+      throw err;
+    }
+  }
+
   function schedulePeriodicCheck() {
     clearInterval(periodicTimer);
     const mode = getSyncMode();
@@ -238,6 +267,7 @@ const RecallSync = (function () {
     pushIfDirty,
     flushPendingSync,
     backupNow,
+    restoreNow,
     onStatus,
     getSyncMode,
     setSyncMode,

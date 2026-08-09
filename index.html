@@ -160,6 +160,16 @@
   .settings-link:active { transform: scale(0.94); }
   .settings-link svg { width: 19px; height: 19px; }
 
+  @media (max-width: 460px) {
+    .icon-cluster { gap: 6px !important; flex-wrap: wrap; }
+    .user-chip .name { display: none; }
+    .sync-badge { padding: 2px 7px; font-size: 0.65rem; }
+    .settings-link { width: 32px; height: 32px; }
+    .settings-link svg { width: 17px; height: 17px; }
+    .sign-in-btn { padding: 7px 11px; font-size: 0.78rem; }
+    .topbar { padding: 16px 16px; }
+  }
+
   .auth-gate {
     position: fixed;
     inset: 0;
@@ -232,7 +242,7 @@
       <h1>Recall Manual 🌸</h1>
       <div class="subtitle">Your cards, your handwriting, your pace</div>
     </div>
-    <div style="display:flex; align-items:center; gap:10px;">
+    <div class="icon-cluster" style="display:flex; align-items:center; gap:10px;">
       <div id="authArea" class="auth-area"></div>
       <a class="settings-link" href="search.html" aria-label="Search">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">

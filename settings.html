@@ -248,6 +248,7 @@
 
       <div class="backup-actions">
         <button class="btn btn-primary" id="backupNowBtn" style="flex:1">Backup now</button>
+        <button class="btn btn-ghost" id="restoreNowBtn" style="flex:1">Restore from Drive</button>
       </div>
     </div>
 
@@ -442,6 +443,24 @@
       showToast('Backed up to Drive 🌸');
     } catch (err) {
       showToast('Backup failed: ' + err.message, 4000);
+    }
+  });
+
+  document.getElementById('restoreNowBtn').addEventListener('click', async () => {
+    const ok = confirm('This replaces everything on this device with whatever is currently backed up on Drive. Any local changes not yet backed up will be lost. Continue?');
+    if (!ok) return;
+    try {
+      showToast('Restoring from Drive…');
+      const result = await RecallSync.restoreNow();
+      updateLastSyncedText();
+      if (result.action === 'none') {
+        showToast('No backup found in Drive for this account yet', 4000);
+      } else {
+        showToast(`Restored ${result.deckCount} deck(s) from Drive 🌸`);
+        renderManageList();
+      }
+    } catch (err) {
+      showToast('Restore failed: ' + err.message, 4000);
     }
   });
 
