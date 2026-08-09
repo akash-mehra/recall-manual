@@ -413,6 +413,31 @@
     ]);
   }
 
+  // Safari/iOS specifically blocks the no-interaction "silent" Google token
+  // refresh that Chrome allows (Intelligent Tracking Prevention). When that
+  // happens, the fix is trivial — one more interactive tap — so we offer
+  // that directly on the sync badge rather than leaving a dead-end error.
+  function showReauthPrompt() {
+    const badge = document.getElementById('syncBadge');
+    if (badge) {
+      badge.className = 'sync-badge error';
+      badge.textContent = 'tap to reconnect';
+      badge.style.cursor = 'pointer';
+      badge.onclick = async () => {
+        badge.textContent = 'reconnecting…';
+        badge.onclick = null;
+        try {
+          await RecallAuth.signIn(); // interactive; triggers onAuthChange -> reconcile again on success
+        } catch (err) {
+          const code = err && err.error ? err.error : (err && err.message) || 'unknown error';
+          showToast('Reconnect failed: ' + code, 4000);
+          badge.textContent = 'tap to reconnect';
+        }
+      };
+    }
+    showToast('Your Drive session needs a quick refresh — tap the badge next to your name to reconnect', 5000);
+  }
+
   RecallAuth.onAuthChange(async (user) => {
     if (user) {
       renderSignedIn(user);
@@ -421,25 +446,40 @@
         showApp();
       }
       try {
-        // A hung network/token call would otherwise leave the badge stuck
-        // on "idle" forever with zero feedback — this guarantees SOME
-        // terminal state (success, explicit error, or timeout) every time.
-        const result = await withTimeout(RecallSync.reconcileOnSignIn(), 15000, 'Drive sync');
-        if (result.action === 'pulled') {
-          showToast(`Synced from Drive: ${result.deckCount} deck(s) restored`);
-          renderDecks();
-        } else if (result.action === 'pushed-initial' || result.action === 'pushed') {
-          showToast('Backed up to Drive');
-        } else if (result.action === 'error') {
-          showToast('Drive sync error: ' + result.message, 5000);
+        // If we already know the cached token is stale, don't bother
+        // waiting through a silent-refresh attempt that's very likely to
+        // fail the same way on Safari/iOS — go straight to the one-tap fix.
+        if (!RecallAuth.hasValidCachedToken()) {
+          showReauthPrompt();
+        } else {
+          // A hung network/token call would otherwise leave the badge stuck
+          // on "idle" forever with zero feedback — this guarantees SOME
+          // terminal state (success, explicit error, or timeout) every time.
+          const result = await withTimeout(RecallSync.reconcileOnSignIn(), 15000, 'Drive sync');
+          if (result.action === 'pulled') {
+            showToast(`Synced from Drive: ${result.deckCount} deck(s) restored`);
+            renderDecks();
+          } else if (result.action === 'pushed-initial' || result.action === 'pushed') {
+            showToast('Backed up to Drive');
+          } else if (result.action === 'error') {
+            if (result.needsReauth) {
+              showReauthPrompt();
+            } else {
+              showToast('Drive sync error: ' + result.message, 5000);
+            }
+          }
         }
       } catch (err) {
-        const badge = document.getElementById('syncBadge');
-        if (badge) {
-          badge.className = 'sync-badge error';
-          badge.textContent = 'sync error';
+        if (err.needsReauth) {
+          showReauthPrompt();
+        } else {
+          const badge = document.getElementById('syncBadge');
+          if (badge) {
+            badge.className = 'sync-badge error';
+            badge.textContent = 'sync error';
+          }
+          showToast('Drive sync error: ' + err.message, 6000);
         }
-        showToast('Drive sync error: ' + err.message, 6000);
       }
     } else {
       renderSignedOut();

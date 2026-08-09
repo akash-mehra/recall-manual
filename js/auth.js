@@ -107,19 +107,25 @@ const RecallAuth = (function () {
   function requestToken({ silent }) {
     return new Promise(async (resolve, reject) => {
       const client = await ensureTokenClient();
-      // A silent GIS request that never calls back (seen on some iOS
-      // Safari/WebKit configurations) would otherwise hang this promise
-      // forever with no error — every caller up the chain (reconcile,
-      // backupNow, restoreNow) would just stall silently. A timeout here
-      // guarantees SOME resolution, at the actual likely hang point rather
-      // than only at the outermost caller.
+      // A silent GIS request that never calls back is a known Safari/iOS
+      // pattern: Intelligent Tracking Prevention specifically targets
+      // exactly this kind of no-user-interaction cross-site auth refresh
+      // that Chrome allows. Tagging it distinctly (rather than a generic
+      // error) lets callers offer "tap to reconnect" instead of a dead end.
       const timeoutMs = silent ? 12000 : 45000; // interactive (popup) gets longer
       const timer = setTimeout(() => {
-        reject(new Error(`Google sign-in ${silent ? 'silent refresh' : 'request'} timed out`));
+        const err = new Error(`Google sign-in ${silent ? 'silent refresh' : 'request'} timed out`);
+        if (silent) err.needsReauth = true;
+        reject(err);
       }, timeoutMs);
       client.callback = (resp) => {
         clearTimeout(timer);
-        if (resp.error) return reject(resp);
+        if (resp.error) {
+          const err = new Error(resp.error_description || resp.error);
+          err.code = resp.error;
+          if (silent) err.needsReauth = true;
+          return reject(err);
+        }
         resolve(resp);
       };
       client.requestAccessToken({ prompt: silent ? '' : 'consent' });
@@ -189,6 +195,11 @@ const RecallAuth = (function () {
     return currentUser;
   }
 
+  function hasValidCachedToken() {
+    const cached = readCachedToken();
+    return !!(cached && cached.token && cached.expiresAt > Date.now());
+  }
+
   function getLastError() {
     return lastError;
   }
@@ -207,6 +218,7 @@ const RecallAuth = (function () {
     getCurrentUser,
     getAccessToken,
     getLastError,
+    hasValidCachedToken,
     DRIVE_SCOPE,
   };
 })();

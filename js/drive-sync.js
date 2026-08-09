@@ -255,7 +255,7 @@ const RecallSync = (function () {
     } catch (err) {
       console.error('Drive sync reconciliation failed', err);
       setStatus('error', err.message);
-      return { action: 'error', message: err.message };
+      return { action: 'error', message: err.message, needsReauth: !!err.needsReauth };
     } finally {
       schedulePeriodicCheck();
     }
